@@ -6415,56 +6415,151 @@ button:focus-visible {
 .source-dialog-gallery .dialog-web-source { box-shadow: 0 14px 38px rgba(42, 33, 24, .14); }
 .source-dialog-gallery .dialog-web-source blockquote { padding: 62px 48px 38px; font-size: 19px; }
 
-/* Pomodoro timer */
-.pomodoro-widget {
-  position: relative;
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 7px 5px 10px;
-  border: 1px solid #c9bfb2;
-  background: #fffdf8;
-  outline: none;
+/* Floating tomato timer */
+.tomato-timer {
+  position: fixed;
+  right: 34px;
+  bottom: 30px;
+  z-index: 42;
+  width: 104px;
+  height: 104px;
 }
 
-.pomodoro-main { display: flex; align-items: center; gap: 7px; }
-.pomodoro-main > span { color: #9a352c; font-size: 19px; }
-.pomodoro-main > div { display: grid; min-width: 47px; }
-.pomodoro-main small { color: #7b7268; font-size: 8px; font-weight: 800; letter-spacing: .1em; }
-.pomodoro-main b { color: #26211c; font: 700 16px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.pomodoro-actions { display: flex; gap: 3px; }
-.pomodoro-actions button { min-height: 30px; padding: 5px 7px; border: 0; background: #eee7dd; color: #615950; font-size: 9px; font-weight: 800; cursor: pointer; }
-.pomodoro-actions button:first-child { background: #4d6756; color: white; }
-.pomodoro-tooltip {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 10px);
-  right: 0;
-  width: 280px;
-  padding: 15px 17px;
-  pointer-events: none;
-  border: 1px solid #bdb2a5;
-  border-top: 3px solid #9a352c;
-  background: #fffdf8;
-  box-shadow: 0 15px 35px rgba(43, 34, 25, .18);
-  opacity: 0;
-  transform: translateY(-5px);
-  transition: opacity .16s ease, transform .16s ease;
+.tomato-trigger {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  filter: drop-shadow(0 13px 16px rgba(71, 35, 25, .2));
+  transition: transform .2s ease, filter .2s ease;
 }
-.pomodoro-tooltip::before { content: ''; position: absolute; right: 22px; bottom: 100%; border: 7px solid transparent; border-bottom-color: #9a352c; }
-.pomodoro-widget:hover .pomodoro-tooltip,
-.pomodoro-widget:focus-within .pomodoro-tooltip { opacity: 1; transform: translateY(0); }
-.pomodoro-tooltip b { color: #29241e; font: 700 15px Georgia, "Songti SC", serif; }
-.pomodoro-tooltip p { margin: 7px 0 9px; color: #665e55; font-size: 11px; line-height: 1.65; }
-.pomodoro-tooltip small { color: #9a352c; font-size: 9px; font-weight: 800; }
+
+.tomato-trigger:hover { transform: translateY(-4px) rotate(-1deg); filter: drop-shadow(0 17px 20px rgba(71, 35, 25, .25)); }
+.tomato-trigger:focus-visible { outline: 3px solid rgba(77, 103, 86, .58); outline-offset: 5px; }
+.tomato-progress {
+  position: absolute;
+  inset: 1px;
+  border-radius: 50%;
+  background: conic-gradient(#f4d39c var(--timer-progress), rgba(255, 255, 255, .25) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 0);
+  opacity: .9;
+}
+
+.tomato-illustration {
+  position: absolute;
+  inset: -7px;
+  display: grid;
+  place-items: center;
+  font-size: 102px;
+  line-height: 1;
+  transform: rotate(-3deg);
+  user-select: none;
+}
+
+.tomato-clock {
+  position: relative;
+  z-index: 2;
+  min-width: 65px;
+  margin-top: 15px;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 5px 8px 6px;
+  border: 1px solid rgba(255, 255, 255, .58);
+  border-radius: 999px;
+  background: rgba(116, 22, 19, .79);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .25), 0 3px 8px rgba(66, 17, 14, .2);
+  color: #fffaf2;
+  backdrop-filter: blur(4px);
+}
+
+.tomato-clock small { font-size: 9px; font-weight: 800; letter-spacing: .18em; }
+.tomato-clock b { font: 750 17px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: -.03em; }
+.tomato-status {
+  position: absolute;
+  z-index: 3;
+  right: -2px;
+  bottom: 2px;
+  padding: 4px 7px;
+  border: 2px solid #fffaf2;
+  border-radius: 999px;
+  background: #4d6756;
+  color: white;
+  font-size: 9px;
+  font-weight: 850;
+  box-shadow: 0 4px 10px rgba(45, 50, 39, .2);
+}
+
+.tomato-timer.is-break .tomato-clock { background: rgba(47, 82, 58, .84); }
+.tomato-timer.is-break .tomato-status { background: #ad632e; }
+.tomato-timer.is-running .tomato-status::before { content: ''; display: inline-block; width: 5px; height: 5px; margin-right: 4px; border-radius: 50%; background: #dff0d6; vertical-align: 1px; }
+.tomato-timer.is-running .tomato-trigger { animation: tomato-breathe 2.8s ease-in-out infinite; }
+
+.tomato-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 14px);
+  width: 300px;
+  padding: 18px;
+  visibility: hidden;
+  pointer-events: none;
+  border: 1px solid #c8bcae;
+  border-radius: 13px;
+  background: rgba(255, 253, 248, .98);
+  box-shadow: 0 21px 54px rgba(47, 37, 27, .2);
+  opacity: 0;
+  transform: translateY(8px) scale(.97);
+  transform-origin: right bottom;
+  transition: opacity .18s ease, transform .18s ease, visibility .18s;
+}
+
+.tomato-panel::after {
+  content: '';
+  position: absolute;
+  right: 38px;
+  top: 100%;
+  width: 14px;
+  height: 14px;
+  border-right: 1px solid #c8bcae;
+  border-bottom: 1px solid #c8bcae;
+  background: #fffdf8;
+  transform: translateY(-7px) rotate(45deg);
+}
+
+.tomato-timer:hover .tomato-panel,
+.tomato-timer:focus-within .tomato-panel,
+.tomato-timer.is-open .tomato-panel { visibility: visible; pointer-events: auto; opacity: 1; transform: translateY(0) scale(1); }
+.tomato-panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tomato-panel header > div { display: grid; gap: 2px; }
+.tomato-panel header span { color: #9a352c; font: 800 9px/1 ui-monospace, monospace; letter-spacing: .14em; }
+.tomato-panel header b { color: #28231e; font: 700 19px/1.35 Georgia, "Songti SC", serif; }
+.tomato-panel header em { padding: 5px 7px; border-radius: 999px; background: #f0e5d9; color: #8b3b30; font: 800 9px/1 ui-monospace, monospace; font-style: normal; }
+.tomato-panel p { margin: 10px 0 12px; color: #6c6359; font-size: 12px; line-height: 1.7; }
+.tomato-panel-progress { height: 6px; overflow: hidden; border-radius: 999px; background: #e8dfd3; }
+.tomato-panel-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #bc332c, #dd7b4b); transition: width .25s linear; }
+.tomato-timer.is-break .tomato-panel-progress i { background: linear-gradient(90deg, #4d6756, #8aa174); }
+.tomato-actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 14px; }
+.tomato-actions button { min-height: 38px; padding: 8px 14px; border: 1px solid #c8bcae; border-radius: 6px; background: #f4eee5; color: #5f574e; font-size: 12px; font-weight: 800; cursor: pointer; }
+.tomato-actions .primary { border-color: #a92e28; background: #b8322b; color: white; }
+.tomato-actions button:hover { filter: brightness(.97); }
+
+@keyframes tomato-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.025); }
+}
 
 @media (max-width: 980px) {
   .web-import-layout { grid-template-columns: 1fr; }
   .web-selection-panel { position: static; max-height: none; }
   .web-selection-list { max-height: 420px; }
   .web-readable-content { max-height: 70vh; }
-  .pomodoro-widget { order: -1; }
 }
 
 @media (max-width: 760px) {
@@ -6477,8 +6572,13 @@ button:focus-visible {
   .web-readable-content p { font-size: 17px; }
   .web-manual-content { min-height: 430px; padding: 24px 18px; }
   .reader-actions { grid-template-columns: 1fr auto auto; }
-  .pomodoro-widget { grid-column: 1 / -1; justify-content: space-between; }
-  .pomodoro-tooltip { right: auto; left: 0; width: min(280px, calc(100vw - 34px)); }
+  .tomato-timer { right: 15px; bottom: 76px; width: 88px; height: 88px; }
+  .tomato-trigger { width: 88px; height: 88px; }
+  .tomato-illustration { font-size: 86px; }
+  .tomato-clock { min-width: 58px; margin-top: 13px; padding: 4px 7px 5px; }
+  .tomato-clock b { font-size: 15px; }
+  .tomato-status { right: -1px; bottom: -1px; }
+  .tomato-panel { width: min(300px, calc(100vw - 30px)); }
 }
 
 @media (max-width: 560px) {
@@ -6487,6 +6587,10 @@ button:focus-visible {
   .upload-top { font-size: 0; }
   .upload-top::after { content: 'PDF'; font-size: 11px; }
   .upload-top span { font-size: 15px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tomato-timer.is-running .tomato-trigger { animation: none; }
 }
 
 /* Unified material upload menu */

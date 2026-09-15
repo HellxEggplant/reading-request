@@ -58,6 +58,7 @@ const ui = {
   pomodoroRemaining: 25 * 60,
   pomodoroRunning: false,
   pomodoroEndsAt: null,
+  pomodoroPanelOpen: false,
 };
 
 let dbPromise;
@@ -752,7 +753,7 @@ function readerPage() {
   return shell(`
     <section class="reader-heading">
       <div><button class="back-button" data-view="articles">← 返回精读文章</button><p class="eyebrow">${esc(article.level)} · ${esc(article.documentName)}</p><h1>${esc(article.title)}</h1></div>
-      <div class="reader-actions">${pomodoroMarkup()}<div class="reader-progress" aria-label="精读进度 ${progress}%"><div><span>精读进度</span><b>${progress}%</b></div><i><em style="width:${progress}%"></em></i></div><button class="outline reader-save-button" data-save-reader>保存</button><button class="primary reader-complete-button" data-complete-reader>${article.completed ? '已完成 ✓' : '完成精读'}</button></div>
+      <div class="reader-actions"><div class="reader-progress" aria-label="精读进度 ${progress}%"><div><span>精读进度</span><b>${progress}%</b></div><i><em style="width:${progress}%"></em></i></div><button class="outline reader-save-button" data-save-reader>保存</button><button class="primary reader-complete-button" data-complete-reader>${article.completed ? '已完成 ✓' : '完成精读'}</button></div>
     </section>
     <div class="reader-layout" style="--reader-split:${ui.readerSplit}%">
       <section class="source-pane">
@@ -783,6 +784,7 @@ function readerPage() {
         </div>
       </section>
     </div>
+    ${pomodoroMarkup()}
     ${reconstructionSidebarMarkup(article)}
     ${ui.sourceDialog ? sourceDialogMarkup(article) : ''}
     ${ui.wordDialog ? wordDialogMarkup(article) : ''}
@@ -794,11 +796,22 @@ function pomodoroMarkup() {
   const seconds = ui.pomodoroRemaining % 60;
   const time = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   const label = ui.pomodoroMode === 'focus' ? '专注' : '休息';
-  return `<div class="pomodoro-widget" tabindex="0" aria-label="番茄时钟，${label}${time}">
-    <div class="pomodoro-main"><span aria-hidden="true">◷</span><div><small>${label}</small><b data-pomodoro-time>${time}</b></div></div>
-    <div class="pomodoro-actions"><button type="button" data-pomodoro-toggle>${ui.pomodoroRunning ? '暂停' : '开始'}</button><button type="button" data-pomodoro-reset>重置</button></div>
-    <aside class="pomodoro-tooltip" role="tooltip"><b>什么是番茄时钟？</b><p>用 25 分钟专注精读，再休息 5 分钟。短时段可以减少分心，让阅读更容易坚持。</p><small>当前阶段：${label} · ${ui.pomodoroMode === 'focus' ? '25' : '5'} 分钟</small></aside>
-  </div>`;
+  const duration = ui.pomodoroMode === 'focus' ? 25 * 60 : 5 * 60;
+  const progress = Math.max(0, Math.min(100, (duration - ui.pomodoroRemaining) / duration * 100));
+  return `<aside class="tomato-timer ${ui.pomodoroRunning ? 'is-running' : ''} ${ui.pomodoroMode === 'break' ? 'is-break' : ''} ${ui.pomodoroPanelOpen ? 'is-open' : ''}">
+    <button class="tomato-trigger" type="button" data-pomodoro-panel-toggle aria-expanded="${ui.pomodoroPanelOpen}" aria-label="番茄时钟，${label} ${time}，打开计时控制">
+      <span class="tomato-progress" style="--timer-progress:${progress}%" aria-hidden="true"></span>
+      <span class="tomato-illustration" aria-hidden="true">🍅</span>
+      <span class="tomato-clock"><small>${label}</small><b data-pomodoro-time>${time}</b></span>
+      <span class="tomato-status" aria-hidden="true">${ui.pomodoroRunning ? '计时中' : '待开始'}</span>
+    </button>
+    <section class="tomato-panel" aria-label="番茄时钟控制">
+      <header><div><span>POMODORO</span><b>${label}时间</b></div><em>${ui.pomodoroMode === 'focus' ? '25 MIN' : '5 MIN'}</em></header>
+      <p>用 25 分钟专注精读，再休息 5 分钟。短时段更容易保持注意力。</p>
+      <div class="tomato-panel-progress" role="progressbar" aria-label="${label}计时进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress)}"><i data-pomodoro-progress style="width:${progress}%"></i></div>
+      <div class="tomato-actions"><button class="primary" type="button" data-pomodoro-toggle>${ui.pomodoroRunning ? '暂停计时' : '开始计时'}</button><button type="button" data-pomodoro-reset>重置</button></div>
+    </section>
+  </aside>`;
 }
 
 function reconstructionSidebarMarkup(article) {
@@ -1359,6 +1372,10 @@ function bind() {
   }
   document.querySelector('[data-save-reader]')?.addEventListener('click', () => saveReader(false));
   document.querySelector('[data-complete-reader]')?.addEventListener('click', () => saveReader(true));
+  document.querySelector('[data-pomodoro-panel-toggle]')?.addEventListener('click', () => {
+    ui.pomodoroPanelOpen = !ui.pomodoroPanelOpen;
+    render();
+  });
   document.querySelector('[data-pomodoro-toggle]')?.addEventListener('click', togglePomodoro);
   document.querySelector('[data-pomodoro-reset]')?.addEventListener('click', resetPomodoro);
   document.querySelector('[data-add-sentence]')?.addEventListener('click', addSentence);
@@ -1620,7 +1637,14 @@ function updatePomodoroDisplay() {
   const minutes = Math.floor(ui.pomodoroRemaining / 60);
   const seconds = ui.pomodoroRemaining % 60;
   element.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  element.closest('.pomodoro-widget')?.setAttribute('aria-label', `番茄时钟，${ui.pomodoroMode === 'focus' ? '专注' : '休息'}${element.textContent}`);
+  const duration = ui.pomodoroMode === 'focus' ? 25 * 60 : 5 * 60;
+  const progress = Math.max(0, Math.min(100, (duration - ui.pomodoroRemaining) / duration * 100));
+  const timer = element.closest('.tomato-timer');
+  timer?.querySelector('.tomato-trigger')?.setAttribute('aria-label', `番茄时钟，${ui.pomodoroMode === 'focus' ? '专注' : '休息'} ${element.textContent}，打开计时控制`);
+  const progressElement = timer?.querySelector('[data-pomodoro-progress]');
+  if (progressElement) progressElement.style.width = `${progress}%`;
+  progressElement?.parentElement?.setAttribute('aria-valuenow', String(Math.round(progress)));
+  timer?.querySelector('.tomato-progress')?.style.setProperty('--timer-progress', `${progress}%`);
   document.title = ui.pomodoroRunning ? `${element.textContent} · 精读任务站` : '精读任务站 · 阅读书库';
 }
 
