@@ -8,13 +8,14 @@ async function ensurePdfJs() {
 }
 
 const DB_NAME = 'readquest-library';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const CEFR = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
 const ui = {
   view: 'library',
   documents: [],
   articles: [],
+  activities: [],
   selectedDocumentId: null,
   selectedArticleId: null,
   pdf: null,
@@ -75,6 +76,9 @@ function openDatabase() {
       if (!database.objectStoreNames.contains('articles')) {
         database.createObjectStore('articles', { keyPath: 'id' });
       }
+      if (!database.objectStoreNames.contains('activities')) {
+        database.createObjectStore('activities', { keyPath: 'id' });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -100,12 +104,14 @@ const records = {
 };
 
 async function refreshData() {
-  const [documents, articles] = await Promise.all([
+  const [documents, articles, activities] = await Promise.all([
     records.all('documents'),
     records.all('articles'),
+    records.all('activities'),
   ]);
   ui.documents = documents.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
   ui.articles = articles.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  ui.activities = activities.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 }
 
 function esc(value = '') {
@@ -409,32 +415,202 @@ function growthPage() {
   const translated = sentences.filter(sentence => sentence.translation?.trim()).length;
   const words = new Set(ui.articles.flatMap(article => article.vocabulary.map(word => word.toLowerCase())));
   const completed = ui.articles.filter(article => article.completed).length;
+  const difficult = sentences.filter(sentence => sentence.difficult).length;
   const levelCounts = CEFR.map(level => ({
     level,
     count: ui.articles.filter(article => article.level === level).length,
   }));
   const maxLevel = Math.max(1, ...levelCounts.map(item => item.count));
+  const timeline = buildGrowthTimeline();
+  const activeDays = timeline.map(day => day.dateKey);
+  const streak = calculateReadingStreak(activeDays);
+  const lastSevenStart = new Date();
+  lastSevenStart.setHours(0, 0, 0, 0);
+  lastSevenStart.setDate(lastSevenStart.getDate() - 6);
+  const lastSeven = timeline.filter(day => new Date(`${day.dateKey}T00:00:00`) >= lastSevenStart);
+  const weeklyTranslations = lastSeven.reduce((sum, day) => sum + day.gains.translated, 0);
+  const weeklyWords = lastSeven.reduce((sum, day) => sum + day.gains.vocabulary, 0);
   return shell(`
-    <section class="page-heading">
-      <div><p class="eyebrow">READING RECORD</p><h1>阅读记录</h1><p>只记录真实发生的阅读，不使用积分、卡牌或排行榜。</p></div>
+    <section class="page-heading growth-heading">
+      <div><p class="eyebrow">READING RECORD</p><h1>阅读记录</h1><p>回看每天读过的文章与完成的练习，让词汇、翻译和句子理解的进步清晰可见。</p></div>
+      <div class="growth-streak"><span>连续阅读</span><b>${streak}</b><small>天</small></div>
     </section>
     <div class="stat-grid">
       ${[
-        ['▤', ui.documents.length, '书库资料'],
+        ['日', activeDays.length, '有效阅读日'],
         ['⌁', completed, '完成精读'],
         ['译', translated, '已译句子'],
         ['Aa', words.size, '标记生词'],
       ].map(([icon, value, label]) => `<article class="stat-card"><span>${icon}</span><b>${value}</b><small>${label}</small></article>`).join('')}
     </div>
-    <section class="level-panel">
-      <div class="section-title"><div><p class="eyebrow">CEFR</p><h2>阅读难度分布</h2></div></div>
-      <div class="level-chart">
-        ${levelCounts.map(item => `
-          <div><span><b>${item.level}</b><small>${item.count} 篇</small></span><i><em style="width:${item.count / maxLevel * 100}%"></em></i></div>
-        `).join('')}
-      </div>
+    <section class="weekly-growth-strip">
+      <div><span>最近 7 天</span><b>${lastSeven.length}</b><small>天有阅读</small></div>
+      <div><span>翻译提升</span><b>＋${weeklyTranslations}</b><small>句</small></div>
+      <div><span>词汇积累</span><b>＋${weeklyWords}</b><small>词</small></div>
+      <div><span>当前训练</span><b>${difficult}</b><small>个长难句</small></div>
     </section>
+    <div class="growth-dashboard">
+      <section class="daily-record-panel">
+        <div class="section-title"><div><p class="eyebrow">DAILY PROGRESS</p><h2>每天完成了什么</h2></div><span>${timeline.length ? `${timeline.length} 天记录` : '从今天开始积累'}</span></div>
+        ${timeline.length ? `<div class="daily-timeline">${timeline.map(growthDayMarkup).join('')}</div>` : `
+          <div class="growth-empty"><span>日</span><h3>还没有阅读记录</h3><p>完成一次句子翻译、标记生词或保存精读后，这里会按日期显示你的学习进步。</p><button class="primary" data-view="articles">开始精读</button></div>`}
+      </section>
+      <aside class="level-panel growth-level-panel">
+        <div class="section-title"><div><p class="eyebrow">CEFR</p><h2>阅读难度分布</h2></div></div>
+        <div class="level-chart">
+          ${levelCounts.map(item => `
+            <div><span><b>${item.level}</b><small>${item.count} 篇</small></span><i><em style="width:${item.count / maxLevel * 100}%"></em></i></div>
+          `).join('')}
+        </div>
+        <div class="growth-reading-tip"><span>本阶段观察</span><p>${growthObservation(levelCounts, translated, words.size, difficult)}</p></div>
+      </aside>
+    </div>
   `);
+}
+
+function articleStudyMetrics(article) {
+  return {
+    sentences: article.sentences.length,
+    translated: article.sentences.filter(sentence => sentence.translation?.trim()).length,
+    notes: article.sentences.filter(sentence => sentence.notes?.trim()).length,
+    vocabulary: new Set(article.vocabulary.map(word => word.toLocaleLowerCase())).size,
+    difficult: article.sentences.filter(sentence => sentence.difficult).length,
+    completed: Boolean(article.completed),
+  };
+}
+
+function localDayKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function buildGrowthTimeline() {
+  const events = ui.activities.map(activity => ({ ...activity }));
+  ui.articles.forEach(article => {
+    if (events.some(event => event.articleId === article.id && event.type === 'study')) return;
+    events.push({
+      id: `legacy:${article.id}`,
+      type: 'study',
+      articleId: article.id,
+      articleTitle: article.title,
+      articleLevel: article.level,
+      sourceName: article.documentName,
+      occurredAt: article.updatedAt || article.createdAt,
+      dateKey: localDayKey(article.updatedAt || article.createdAt),
+      metrics: articleStudyMetrics(article),
+      legacy: true,
+    });
+  });
+
+  const previousByArticle = new Map();
+  const enriched = events.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)).map(event => {
+    if (event.type !== 'study') return event;
+    const previous = previousByArticle.get(event.articleId) || { translated: 0, notes: 0, vocabulary: 0, difficult: 0, completed: false };
+    const metrics = event.metrics || {};
+    const gains = {
+      translated: Math.max(0, (metrics.translated || 0) - (previous.translated || 0)),
+      notes: Math.max(0, (metrics.notes || 0) - (previous.notes || 0)),
+      vocabulary: Math.max(0, (metrics.vocabulary || 0) - (previous.vocabulary || 0)),
+      difficult: Math.max(0, (metrics.difficult || 0) - (previous.difficult || 0)),
+      completed: Boolean(metrics.completed && !previous.completed),
+    };
+    previousByArticle.set(event.articleId, metrics);
+    return { ...event, gains };
+  });
+
+  const days = new Map();
+  enriched.forEach(event => {
+    const dateKey = event.dateKey || localDayKey(event.occurredAt);
+    if (!days.has(dateKey)) days.set(dateKey, {
+      dateKey,
+      events: [],
+      articles: new Map(),
+      gains: { translated: 0, notes: 0, vocabulary: 0, difficult: 0, completed: 0, practices: 0 },
+    });
+    const day = days.get(dateKey);
+    day.events.push(event);
+    if (event.type === 'study') {
+      const gains = event.gains || {};
+      day.gains.translated += gains.translated || 0;
+      day.gains.notes += gains.notes || 0;
+      day.gains.vocabulary += gains.vocabulary || 0;
+      day.gains.difficult += gains.difficult || 0;
+      day.gains.completed += gains.completed ? 1 : 0;
+      const existing = day.articles.get(event.articleId);
+      day.articles.set(event.articleId, existing?.practice ? { ...event, practice: existing.practice } : event);
+    }
+    if (event.type === 'practice') {
+      day.gains.practices += 1;
+      const existing = day.articles.get(event.articleId) || event;
+      day.articles.set(event.articleId, { ...existing, practice: event.practice });
+    }
+    if (event.type === 'created' && !day.articles.has(event.articleId)) day.articles.set(event.articleId, event);
+  });
+  return [...days.values()].map(day => ({ ...day, articles: [...day.articles.values()] })).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+}
+
+function formatGrowthDate(dateKey) {
+  const today = localDayKey();
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  if (dateKey === today) return '今天';
+  if (dateKey === localDayKey(yesterdayDate)) return '昨天';
+  return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date(`${dateKey}T12:00:00`));
+}
+
+function growthDayMarkup(day) {
+  const badges = [
+    day.gains.translated ? `＋${day.gains.translated} 句翻译` : '',
+    day.gains.vocabulary ? `＋${day.gains.vocabulary} 个生词` : '',
+    day.gains.difficult ? `＋${day.gains.difficult} 个长难句` : '',
+    day.gains.notes ? `＋${day.gains.notes} 条笔记` : '',
+    day.gains.completed ? `完成 ${day.gains.completed} 篇` : '',
+    day.gains.practices ? `${day.gains.practices} 次默写` : '',
+  ].filter(Boolean);
+  return `<article class="growth-day">
+    <header><div><time datetime="${day.dateKey}">${formatGrowthDate(day.dateKey)}</time><span>${day.dateKey}</span></div><b>${day.articles.length} 篇文章</b></header>
+    <div class="growth-gains">${badges.length ? badges.map(badge => `<span>${badge}</span>`).join('') : '<span>建立了阅读记录</span>'}</div>
+    <div class="growth-article-list">${day.articles.map(growthArticleMarkup).join('')}</div>
+  </article>`;
+}
+
+function growthArticleMarkup(event) {
+  const metrics = event.metrics || {};
+  const progress = metrics.sentences ? Math.round((metrics.translated || 0) / metrics.sentences * 100) : 0;
+  const details = [];
+  if (event.type === 'created' || event.reason === 'created') details.push('建立精读文章');
+  if (metrics.translated) details.push(`已翻译 ${metrics.translated}/${metrics.sentences} 句`);
+  if (metrics.vocabulary) details.push(`积累 ${metrics.vocabulary} 个生词`);
+  if (metrics.difficult) details.push(`训练 ${metrics.difficult} 个长难句`);
+  if (event.practice) details.push(`默写 ${event.practice.correct}/${event.practice.total} 词正确`);
+  if (metrics.completed) details.push('已完成精读');
+  return `<div class="growth-article-row">
+    <span class="level-badge">${esc(event.articleLevel || '—')}</span>
+    <div><b>${esc(event.articleTitle || '未命名文章')}</b><p>${details.join(' · ') || '阅读并更新了这篇文章'}${event.legacy ? ' · 历史数据补录' : ''}</p></div>
+    <em>${metrics.sentences ? `${progress}%` : '新建'}</em>
+  </div>`;
+}
+
+function calculateReadingStreak(dayKeys) {
+  const days = new Set(dayKeys);
+  const cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+  if (!days.has(localDayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  let count = 0;
+  while (days.has(localDayKey(cursor))) {
+    count += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return count;
+}
+
+function growthObservation(levelCounts, translated, wordCount, difficultCount) {
+  const activeLevels = levelCounts.filter(item => item.count).sort((a, b) => CEFR.indexOf(b.level) - CEFR.indexOf(a.level));
+  if (!ui.articles.length) return '完成第一篇精读后，这里会根据翻译、词汇和长难句练习给出阶段性观察。';
+  const level = activeLevels[0]?.level || 'B1';
+  if (!translated) return `你已经开始阅读 ${level} 难度文章。下一步可以先完成几句中文翻译，让理解过程留下可比较的记录。`;
+  if (!wordCount && !difficultCount) return `目前已完成 ${translated} 句翻译。接下来标记生词和长难句，会更清楚地看到词汇与句法能力的增长。`;
+  return `你已经在 ${level} 难度文章中完成 ${translated} 句翻译，积累 ${wordCount} 个生词，并训练 ${difficultCount} 个长难句。保持按天记录，更容易看见稳定提升。`;
 }
 
 function webImportPage() {
@@ -1196,6 +1372,46 @@ function queueMissingDifficultTranslations() {
   if (next) generateReferenceTranslation(next.id);
 }
 
+async function recordStudySnapshot(article, reason = 'progress') {
+  const occurredAt = new Date().toISOString();
+  const dateKey = localDayKey(occurredAt);
+  const activity = {
+    id: `${dateKey}:study:${article.id}`,
+    type: 'study',
+    reason,
+    articleId: article.id,
+    articleTitle: article.title,
+    articleLevel: article.level,
+    sourceName: article.documentName,
+    occurredAt,
+    dateKey,
+    metrics: articleStudyMetrics(article),
+  };
+  await records.put('activities', activity);
+  ui.activities = [activity, ...ui.activities.filter(item => item.id !== activity.id)].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+}
+
+async function recordPracticeResult(article, sentence, correct, total) {
+  const occurredAt = new Date().toISOString();
+  const dateKey = localDayKey(occurredAt);
+  const id = `${dateKey}:practice:${article.id}:${sentence.id}`;
+  const previous = ui.activities.find(item => item.id === id);
+  const bestCorrect = Math.max(correct, previous?.practice?.correct || 0);
+  const activity = {
+    id,
+    type: 'practice',
+    articleId: article.id,
+    articleTitle: article.title,
+    articleLevel: article.level,
+    sourceName: article.documentName,
+    occurredAt,
+    dateKey,
+    practice: { correct: bestCorrect, total },
+  };
+  await records.put('activities', activity);
+  ui.activities = [activity, ...ui.activities.filter(item => item.id !== id)].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+}
+
 async function changeReaderSentence(direction) {
   const article = ui.articles.find(item => item.id === ui.selectedArticleId);
   if (!article || !direction) return;
@@ -1204,6 +1420,7 @@ async function changeReaderSentence(direction) {
   if (nextIndex === ui.readerSentenceIndex) return;
   article.updatedAt = new Date().toISOString();
   await records.put('articles', article);
+  await recordStudySnapshot(article);
   ui.readerCardDirection = direction < 0 ? 'prev' : 'next';
   ui.readerSentenceIndex = nextIndex;
   render();
@@ -1377,6 +1594,7 @@ async function createWebArticle() {
     updatedAt: now,
   };
   await records.put('articles', article);
+  await recordStudySnapshot(article, 'created');
   await refreshData();
   ui.selectedArticleId = article.id;
   ui.readerSentenceIndex = 0;
@@ -1575,6 +1793,9 @@ async function deleteDocument(id, deleteRelatedArticles = false) {
   if (deleteRelatedArticles) {
     const relatedArticles = ui.articles.filter(article => article.documentId === id);
     await Promise.all(relatedArticles.map(article => records.delete('articles', article.id)));
+    const relatedIds = new Set(relatedArticles.map(article => article.id));
+    const relatedActivities = ui.activities.filter(activity => relatedIds.has(activity.articleId));
+    await Promise.all(relatedActivities.map(activity => records.delete('activities', activity.id)));
   }
   if (ui.selectedDocumentId === id) {
     ui.selectedDocumentId = null;
@@ -1830,6 +2051,7 @@ async function createArticle() {
       updatedAt: now,
     };
     await records.put('articles', article);
+    await recordStudySnapshot(article, 'created');
     await refreshData();
     ui.selectedArticleId = article.id;
     ui.readerSentenceIndex = 0;
@@ -1944,13 +2166,15 @@ async function openWordDefinition(wordValue) {
   const word = String(wordValue || '').trim().replace(/^[^A-Za-z]+|[^A-Za-z'-]+$/g, '');
   if (!article || !word) return;
   collectReader(article);
-  if (!article.vocabulary.some(item => item.toLowerCase() === word.toLowerCase())) article.vocabulary.push(word);
+  const isNewWord = !article.vocabulary.some(item => item.toLowerCase() === word.toLowerCase());
+  if (isNewWord) article.vocabulary.push(word);
   article.updatedAt = new Date().toISOString();
   const storedDefinition = article.wordDefinitions?.[word.toLowerCase()];
   const cached = storedDefinition?.dictionaryVersion >= 2 ? storedDefinition : null;
   ui.wordDialog = { word, status: cached ? 'ready' : 'loading', definition: cached || null, error: '' };
   render();
   await records.put('articles', article);
+  if (isNewWord) await recordStudySnapshot(article, 'vocabulary');
   if (!cached) await loadWordDefinition(word);
 }
 
@@ -2142,6 +2366,9 @@ async function checkReconstructionWords(sentenceId) {
   ui.practiceRevealIds.add(sentenceId);
   article.updatedAt = new Date().toISOString();
   await records.put('articles', article);
+  const expectedWords = sentence.text.match(/[A-Za-z]+(?:['’\-][A-Za-z]+)*/g) || [];
+  const correct = expectedWords.filter((word, index) => normalizePracticeWord(word) === normalizePracticeWord(sentence.reconstructionWords[index])).length;
+  await recordPracticeResult(article, sentence, correct, expectedWords.length);
   render();
 }
 
@@ -2277,6 +2504,7 @@ async function exportLibraryBackup() {
       exportedAt: new Date().toISOString(),
       documents,
       articles: await records.all('articles'),
+      activities: await records.all('activities'),
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload)], { type: 'application/json' }));
     const link = document.createElement('a');
@@ -2307,6 +2535,9 @@ async function importLibraryBackup(file) {
     for (const article of payload.articles) {
       if (article?.id && article?.title) await records.put('articles', article);
     }
+    for (const activity of payload.activities || []) {
+      if (activity?.id && activity?.occurredAt) await records.put('activities', activity);
+    }
     await refreshData();
     render();
     toast(`已恢复 ${payload.documents.length} 本资料和 ${payload.articles.length} 篇精读文章。`);
@@ -2323,12 +2554,13 @@ async function saveReader(markComplete) {
   if (markComplete) article.completed = true;
   article.updatedAt = new Date().toISOString();
   await records.put('articles', article);
+  await recordStudySnapshot(article, markComplete ? 'completed' : 'saved');
   await refreshData();
   render();
   toast(markComplete ? '本次精读已完成并保存。' : '精读记录已保存到离线书库。');
 }
 
-function toggleWord(word) {
+async function toggleWord(word) {
   const article = ui.articles.find(item => item.id === ui.selectedArticleId);
   if (!article) return;
   collectReader(article);
@@ -2336,7 +2568,8 @@ function toggleWord(word) {
   if (index >= 0) article.vocabulary.splice(index, 1);
   else article.vocabulary.push(word);
   article.updatedAt = new Date().toISOString();
-  records.put('articles', article);
+  await records.put('articles', article);
+  await recordStudySnapshot(article, index >= 0 ? 'vocabulary-removed' : 'vocabulary');
   render();
   toast(index >= 0 ? `已取消生词：${word}` : `已标记生词：${word}`);
 }
@@ -2355,12 +2588,13 @@ async function toggleDifficult(id) {
   }
   article.updatedAt = new Date().toISOString();
   await records.put('articles', article);
+  await recordStudySnapshot(article, sentence?.difficult ? 'difficult' : 'difficult-removed');
   if (sentence?.difficult) showDifficultHint();
   else render();
   if (sentence?.difficult && !sentence.referenceTranslation?.trim() && !ui.translationGeneration.has(id)) generateReferenceTranslation(id);
 }
 
-function addSentence() {
+async function addSentence() {
   const article = ui.articles.find(item => item.id === ui.selectedArticleId);
   if (!article) return;
   collectReader(article);
@@ -2373,7 +2607,8 @@ function addSentence() {
     difficult: false,
   });
   article.updatedAt = new Date().toISOString();
-  records.put('articles', article);
+  await records.put('articles', article);
+  await recordStudySnapshot(article, 'sentence-added');
   ui.readerSentenceIndex = article.sentences.length - 1;
   ui.readerCardDirection = 'next';
   render();
