@@ -150,11 +150,18 @@ function shell(content) {
         `).join('')}
       </nav>
       <div class="sync-pill"><i></i><span>本地保存</span></div>
-      <button class="web-import-top" type="button" data-view="webImport"><span>⌁</span> 导入网页</button>
-      <label class="upload-top">
+      <details class="resource-upload-menu">
+        <summary><span>＋</span> 上传资料</summary>
+        <div class="resource-upload-options">
+          <button type="button" data-trigger-pdf-upload aria-label="上传 PDF 文件">
+            <span>PDF</span><b>上传 PDF</b><small>导入期刊或杂志文件</small>
+          </button>
+          <button type="button" data-view="webImport" aria-label="通过文章网址导入">
+            <span>URL</span><b>文章网址</b><small>粘贴链接并选择正文</small>
+          </button>
+        </div>
         <input type="file" accept="application/pdf,.pdf" data-pdf-input hidden>
-        <span>＋</span> 上传 PDF
-      </label>
+      </details>
     </header>
     <div class="app-shell">
       <main class="main">${content}</main>
@@ -852,6 +859,9 @@ function bind() {
     const [file] = event.target.files;
     if (file) importPdf(file);
   }));
+  document.querySelector('[data-trigger-pdf-upload]')?.addEventListener('click', () => {
+    document.querySelector('.resource-upload-menu [data-pdf-input]')?.click();
+  });
   document.querySelector('[data-export-library]')?.addEventListener('click', exportLibraryBackup);
   document.querySelector('[data-import-library]')?.addEventListener('change', event => {
     const [file] = event.target.files;
