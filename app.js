@@ -2,8 +2,8 @@ let pdfjsLib;
 
 async function ensurePdfJs() {
   if (pdfjsLib) return pdfjsLib;
-  pdfjsLib = await import('./node_modules/pdfjs-dist/build/pdf.mjs');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = './node_modules/pdfjs-dist/build/pdf.worker.mjs';
+  pdfjsLib = await import('./vendor/pdfjs/pdf.mjs');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.mjs';
   return pdfjsLib;
 }
 
@@ -196,6 +196,13 @@ function libraryPage() {
           <button class="favorite-filter ${ui.favoriteOnly ? 'active' : ''}" data-favorite-filter aria-pressed="${ui.favoriteOnly}">★ 只看收藏</button>
         </div>
       ` : ''}
+      <div class="library-portability">
+        <div><b>本地书库备份</b><small>换电脑时，先导出整库，再在新设备恢复。PDF、文章与笔记都会包含在备份中。</small></div>
+        <div>
+          <button class="outline" type="button" data-export-library>导出整库</button>
+          <label class="outline backup-import">恢复整库<input type="file" accept="application/json,.json" data-import-library hidden></label>
+        </div>
+      </div>
       <div class="document-grid">
         ${visibleDocuments.map(document => documentCard(document)).join('')}
         ${showUploadCard ? `
@@ -633,7 +640,7 @@ function wordDialogMarkup(article) {
 }
 
 function ecdictSectionMarkup(entry) {
-  if (!entry) return `<section class="word-dictionary-section word-chinese-dictionary"><div class="word-section-title"><span>中文词典</span><b>ECDICT</b></div><p class="dictionary-empty">暂未收录这个词形，可尝试查询原形。</p></section>`;
+  if (!entry) return `<section class="word-dictionary-section word-chinese-dictionary"><div class="word-section-title"><span>中文释义</span><b>待补充</b></div><p class="dictionary-empty">暂未找到中文释义，可以在下方填写适合本文语境的中文笔记。</p></section>`;
   const lines = String(entry.translation || '').split(/\n+/).map(item => item.trim()).filter(Boolean);
   const tagNames = { zk: '中考', gk: '高考', cet4: '四级', cet6: '六级', ky: '考研', ielts: '雅思', toefl: '托福', gre: 'GRE' };
   const tags = String(entry.tag || '').split(/\s+/).map(tag => tagNames[tag.toLowerCase()] || '').filter(Boolean);
@@ -646,7 +653,7 @@ function ecdictSectionMarkup(entry) {
   }).filter(Boolean);
   return `
     <section class="word-dictionary-section word-chinese-dictionary">
-      <div class="word-section-title"><span>中文词典</span><b>ECDICT</b></div>
+      <div class="word-section-title"><span>中文释义</span><b>${esc(entry.source || 'ECDICT')}</b></div>
       ${lines.length ? `<ul class="chinese-definition-list">${lines.map(line => `<li>${esc(line)}</li>`).join('')}</ul>` : '<p class="dictionary-empty">暂无中文释义。</p>'}
       ${tags.length ? `<div class="word-meta-tags">${[...new Set(tags)].map(tag => `<span>${esc(tag)}</span>`).join('')}</div>` : ''}
       ${exchanges.length ? `<details class="word-exchange"><summary>词形变化</summary><div>${exchanges.map(item => `<span><small>${esc(item.label)}</small>${esc(item.value)}</span>`).join('')}</div></details>` : ''}
@@ -673,9 +680,9 @@ function sentenceCard(sentence, index, article) {
         ${checkOpen ? `
           <div class="translation-check-body">
             <label class="reference-translation-only"><span>参考译文</span><textarea data-reference-translation placeholder="正在等待生成，也可以直接填写…" ${generation?.status === 'loading' ? 'aria-busy="true"' : ''}>${esc(reference)}</textarea></label>
-            ${generation?.status === 'loading' ? '<p class="translation-generating"><i></i>本地翻译模型正在生成，首次使用可能需要几秒钟。</p>' : ''}
+            ${generation?.status === 'loading' ? '<p class="translation-generating"><i></i>在线翻译正在生成，首次使用可能需要几秒钟。</p>' : ''}
             ${generation?.status === 'error' ? `<p class="translation-generation-error">${esc(generation.error)}</p>` : ''}
-            <footer><small>Argos Translate 离线生成 · 结果仅供核对，可修改。</small><div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
+            <footer><small>MyMemory 在线生成 · 结果仅供核对，可修改。</small><div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
           </div>` : ''}
       </section>
       <details><summary>校对识别文字</summary><textarea data-sentence-text>${esc(sentence.text)}</textarea></details>
@@ -720,6 +727,11 @@ function bind() {
     const [file] = event.target.files;
     if (file) importPdf(file);
   }));
+  document.querySelector('[data-export-library]')?.addEventListener('click', exportLibraryBackup);
+  document.querySelector('[data-import-library]')?.addEventListener('change', event => {
+    const [file] = event.target.files;
+    if (file) importLibraryBackup(file);
+  });
 
   const dropZone = document.querySelector('#dropZone');
   dropZone?.addEventListener('dragover', event => {
@@ -1562,7 +1574,7 @@ async function openWordDefinition(wordValue) {
   if (!article.vocabulary.some(item => item.toLowerCase() === word.toLowerCase())) article.vocabulary.push(word);
   article.updatedAt = new Date().toISOString();
   const storedDefinition = article.wordDefinitions?.[word.toLowerCase()];
-  const cached = storedDefinition?.dictionaryVersion === 2 ? storedDefinition : null;
+  const cached = storedDefinition?.dictionaryVersion >= 2 ? storedDefinition : null;
   ui.wordDialog = { word, status: cached ? 'ready' : 'loading', definition: cached || null, error: '' };
   render();
   await records.put('articles', article);
@@ -1576,7 +1588,7 @@ async function loadWordDefinition(wordValue, force = false) {
   const article = ui.articles.find(item => item.id === articleId);
   const key = word.toLowerCase();
   const storedDefinition = article?.wordDefinitions?.[key];
-  const cached = storedDefinition?.dictionaryVersion === 2 ? storedDefinition : null;
+  const cached = storedDefinition?.dictionaryVersion >= 2 ? storedDefinition : null;
   if (cached && !force) {
     ui.wordDialog = { word, status: 'ready', definition: cached, error: '' };
     render();
@@ -1585,10 +1597,44 @@ async function loadWordDefinition(wordValue, force = false) {
   ui.wordDialog = { word, status: 'loading', definition: null, error: '' };
   render();
   try {
-    const response = await fetch(`/api/dictionary?word=${encodeURIComponent(word)}`);
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(response.status === 404 ? '两套词典中都没有找到这个词形，可以尝试点击它的原形。' : '词典服务暂时无法连接，请稍后重试。');
-    const normalized = data.structured;
+    const shardKey = word.toLowerCase().replace(/[^a-z]/g, '').slice(0, 2) || '__';
+    const [exactResult, relatedResult, chineseResult] = await Promise.allSettled([
+      fetch(`https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&qe=sp&md=dpr&ipa=1&max=1`),
+      fetch(`https://api.datamuse.com/words?ml=${encodeURIComponent(word)}&max=8`),
+      fetch(`./data/ecdict-shards/${shardKey}.json`),
+    ]);
+    const exactResponse = exactResult.status === 'fulfilled' ? exactResult.value : null;
+    const relatedResponse = relatedResult.status === 'fulfilled' ? relatedResult.value : null;
+    const chineseResponse = chineseResult.status === 'fulfilled' ? chineseResult.value : null;
+    const exactItems = exactResponse?.ok ? await exactResponse.json() : [];
+    const exact = exactItems.find(item => item.word?.toLowerCase() === key) || exactItems[0] || null;
+    const related = relatedResponse?.ok ? (await relatedResponse.json()).map(item => item.word).filter(Boolean).slice(0, 8) : [];
+    const chineseShard = chineseResponse?.ok ? await chineseResponse.json() : {};
+    const chinese = chineseShard[key] ? { ...chineseShard[key], source: 'ECDICT' } : null;
+    if (!exact && !chinese) throw new Error('两套词典中都没有找到这个词形，可以尝试点击它的原形。');
+    const groups = new Map();
+    (exact?.defs || []).forEach(value => {
+      const [part = 'definition', ...content] = value.split('\t');
+      const label = ({ n: 'noun', v: 'verb', adj: 'adjective', adv: 'adverb' })[part] || part;
+      const definitions = groups.get(label) || [];
+      definitions.push({ definition: content.join(' ').trim(), example: '' });
+      groups.set(label, definitions);
+    });
+    if (!groups.size) groups.set('definition', [{ definition: 'See the Chinese definition and add your own contextual note.', example: '' }]);
+    const tags = exact?.tags || [];
+    const normalized = {
+      dictionaryVersion: 3,
+      phonetic: tags.find(tag => tag.startsWith('ipa_pron:'))?.slice(9).trim() || '',
+      audio: '',
+      origin: '',
+      meanings: [...groups].map(([partOfSpeech, definitions], index) => ({
+        partOfSpeech,
+        definitions,
+        synonyms: index === 0 ? related : [],
+      })),
+      chinese,
+      source: exact && chinese ? 'Datamuse 在线英英词典 + ECDICT 英汉词典' : exact ? 'Datamuse 在线英英词典' : 'ECDICT 英汉词典',
+    };
     if (!normalized?.meanings?.length) throw new Error('词典返回了空释义。');
     await cacheWordDefinition(articleId, key, word, normalized);
   } catch (error) {
@@ -1756,28 +1802,103 @@ async function generateReferenceTranslation(sentenceId, regenerate = false) {
   collectReader(article);
   const sentence = article.sentences.find(item => item.id === sentenceId);
   if (!sentence?.text?.trim() || (!regenerate && sentence.referenceTranslation?.trim())) return;
+  if (localStorage.getItem('readquest-mymemory-consent') !== '1') {
+    const allowed = window.confirm('生成参考译文需要把当前英文句子发送到 MyMemory 在线翻译服务。只发送这一句英文，不发送 PDF、笔记或个人信息。是否允许？');
+    if (!allowed) {
+      ui.translationGeneration.set(sentenceId, { status: 'error', error: '未启用在线翻译。你仍可手动填写参考译文。' });
+      render();
+      return;
+    }
+    localStorage.setItem('readquest-mymemory-consent', '1');
+  }
   ui.translationGeneration.set(sentenceId, { status: 'loading', error: '' });
   render();
   try {
-    const response = await fetch('/api/translate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: sentence.text.trim() }),
-    });
+    const sourceText = sentence.text.trim();
+    if (new TextEncoder().encode(sourceText).length > 500) throw new Error('这个句子超过在线翻译的 500 字节限制，请手动填写参考译文。');
+    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(sourceText)}&langpair=en%7Czh-CN`);
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.translatedText?.trim()) throw new Error(data.error || '没有生成可用的参考译文。');
-    sentence.referenceTranslation = data.translatedText.trim();
-    sentence.referenceTranslationSource = data.source || 'Argos Translate 本地离线模型';
-    sentence.referenceTranslationGeneratedAt = data.generatedAt || new Date().toISOString();
+    const translatedText = String(data.responseData?.translatedText || '').trim();
+    if (!response.ok || data.responseStatus !== 200 || !translatedText) throw new Error(data.responseDetails || '没有生成可用的参考译文。');
+    sentence.referenceTranslation = translatedText;
+    sentence.referenceTranslationSource = 'MyMemory 在线翻译';
+    sentence.referenceTranslationGeneratedAt = new Date().toISOString();
     article.updatedAt = new Date().toISOString();
     await records.put('articles', article);
     await refreshData();
     ui.translationGeneration.delete(sentenceId);
     render();
-    toast('参考译文已由本地翻译器生成，可继续修改并保存。');
+    toast('参考译文已生成，可继续修改并保存。');
   } catch (error) {
     ui.translationGeneration.set(sentenceId, { status: 'error', error: error.message || '参考译文生成失败，请重试。' });
     render();
+  }
+}
+
+async function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function dataUrlToBlob(dataUrl) {
+  const response = await fetch(dataUrl);
+  return response.blob();
+}
+
+async function exportLibraryBackup() {
+  if (!ui.documents.length && !ui.articles.length) return toast('当前书库还没有可以导出的内容。', true);
+  toast('正在整理整库备份，PDF 较大时请稍候…');
+  try {
+    const documents = [];
+    for (const item of await records.all('documents')) {
+      documents.push({ ...item, blobDataUrl: item.blob ? await blobToDataUrl(item.blob) : null, blob: undefined });
+    }
+    const payload = {
+      format: 'reading-request-backup',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      documents,
+      articles: await records.all('articles'),
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `精读任务站备份-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('整库备份已导出，请妥善保存。');
+  } catch (error) {
+    console.error(error);
+    toast('备份导出失败，请确认浏览器还有足够空间。', true);
+  }
+}
+
+async function importLibraryBackup(file) {
+  toast('正在恢复书库…');
+  try {
+    const payload = JSON.parse(await file.text());
+    if (payload?.format !== 'reading-request-backup' || !Array.isArray(payload.documents) || !Array.isArray(payload.articles)) {
+      throw new Error('invalid backup');
+    }
+    for (const item of payload.documents) {
+      const { blobDataUrl, ...documentRecord } = item;
+      if (!documentRecord.id || !documentRecord.name) continue;
+      documentRecord.blob = blobDataUrl ? await dataUrlToBlob(blobDataUrl) : null;
+      await records.put('documents', documentRecord);
+    }
+    for (const article of payload.articles) {
+      if (article?.id && article?.title) await records.put('articles', article);
+    }
+    await refreshData();
+    render();
+    toast(`已恢复 ${payload.documents.length} 本资料和 ${payload.articles.length} 篇精读文章。`);
+  } catch (error) {
+    console.error(error);
+    toast('无法恢复：请选择由“精读任务站”导出的 JSON 备份。', true);
   }
 }
 

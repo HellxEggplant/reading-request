@@ -6095,3 +6095,72 @@ button:focus-visible {
   .reader-actions .reader-save-button,
   .reader-actions .reader-complete-button { min-width: 0; padding-inline: 11px; }
 }
+
+.library-portability {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  margin: 16px 0 24px;
+  padding: 15px 18px;
+  border: 1px solid #d7cfc3;
+  border-left: 4px solid #4d6756;
+  background: rgba(255, 253, 248, .72);
+}
+
+.library-portability > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.library-portability b {
+  color: #25211c;
+  font: 700 15px/1.2 Georgia, "Songti SC", serif;
+}
+
+.library-portability small {
+  color: #776f65;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.library-portability > div:last-child {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.library-portability .outline,
+.backup-import {
+  min-height: 38px;
+  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #bbb1a4;
+  border-radius: 2px;
+  background: #fffdf8;
+  color: #4f4941;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.library-portability .outline:hover,
+.backup-import:hover {
+  border-color: #9a352c;
+  color: #9a352c;
+}
+
+@media (max-width: 700px) {
+  .library-portability {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .library-portability > div:last-child,
+  .library-portability .outline,
+  .backup-import {
+    flex: 1;
+  }
+}

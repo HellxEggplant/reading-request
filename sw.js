@@ -1,4 +1,4 @@
-const CACHE = 'readquest-shell-v26';
+const CACHE = 'readquest-shell-v27';
 const CORE = [
   './',
   './index.html',
@@ -6,8 +6,8 @@ const CORE = [
   './app.js',
   './assets/editorial-reading-desk.png',
   './assets/modern-chinese-reading-thumbnails.png',
-  './node_modules/pdfjs-dist/build/pdf.mjs',
-  './node_modules/pdfjs-dist/build/pdf.worker.mjs',
+  './vendor/pdfjs/pdf.mjs',
+  './vendor/pdfjs/pdf.worker.mjs',
 ];
 
 self.addEventListener('install', event => {
