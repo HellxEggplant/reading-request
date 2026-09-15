@@ -6152,6 +6152,21 @@ button:focus-visible {
   color: #9a352c;
 }
 
+.reconstruction-practice-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.reconstruction-practice-footer .reconstruction-practice-actions button {
+  min-width: 112px;
+}
+
+.reconstruction-practice-footer .reconstruction-practice-actions .primary {
+  min-width: 152px;
+}
+
 @media (max-width: 700px) {
   .library-portability {
     align-items: stretch;
@@ -6162,5 +6177,13 @@ button:focus-visible {
   .library-portability .outline,
   .backup-import {
     flex: 1;
+  }
+
+  .reconstruction-practice-actions {
+    width: 100%;
+  }
+
+  .reconstruction-practice-footer .reconstruction-practice-actions button {
+    min-width: 0;
   }
 }

@@ -1,5 +1,5 @@
 const browserBase = 'http://127.0.0.1:9237';
-const target = await fetch(`${browserBase}/json/new?http%3A%2F%2Flocalhost%3A3000%2F%3Fv%3D26`, { method: 'PUT' }).then(response => response.json());
+const target = await fetch(`${browserBase}/json/new?http%3A%2F%2Flocalhost%3A3000%2F%3Fv%3D28`, { method: 'PUT' }).then(response => response.json());
 const socket = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
 let id = 0;
@@ -55,7 +55,7 @@ await evaluate(`new Promise((resolve, reject) => {
     const transaction = request.result.transaction('articles', 'readwrite');
     transaction.objectStore('articles').put({
       id: 'reconstruction-test', documentId: 'test-doc', documentName: 'Magazine Test', title: 'Final Reconstruction Test', level: 'B2', rawText: 'Reading carefully changes how we notice language.', regions: [],
-      sentences: [{ id: 'difficult-test-sentence', text: 'Reading carefully changes how we notice language.', translation: '仔细阅读会改变我们留意语言的方式。', referenceTranslation: '', backTranslation: '', reconstructionWords: [], notes: '', difficult: false }],
+      sentences: [{ id: 'difficult-test-sentence', text: 'Reading carefully changes how we notice language.', translation: '仔细阅读会改变我们留意语言的方式。', referenceTranslation: '仔细阅读会改变我们留意语言的方式。', backTranslation: '', reconstructionWords: [], notes: '', difficult: false }],
       vocabulary: [], completed: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
     });
     transaction.oncomplete = resolve;
@@ -116,6 +116,24 @@ const practice = JSON.parse(await evaluate(`JSON.stringify({
   overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
 })`));
 practice.generated = generated;
+await evaluate(`(() => {
+  const input = document.querySelector('[data-reconstruction-word="0"]');
+  input.value += 'x';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+})()`);
+await pause(250);
+const feedbackDismissed = JSON.parse(await evaluate(`JSON.stringify({
+  resultHidden: !document.querySelector('.standard-answer'),
+  colorFeedbackHidden: !document.querySelector('.word-slot.is-wrong, .word-slot.is-correct'),
+  editedAnswerKept: document.querySelector('[data-reconstruction-word="0"]')?.value === 'Writingx'
+})`));
+await evaluate(`document.querySelector('[data-redo-reconstruction]').click()`);
+await pause(250);
+const redo = JSON.parse(await evaluate(`JSON.stringify({
+  allAnswersCleared: [...document.querySelectorAll('[data-reconstruction-word]')].every(input => !input.value),
+  resultHidden: !document.querySelector('.standard-answer'),
+  firstInputFocused: document.activeElement === document.querySelector('[data-reconstruction-word="0"]')
+})`));
 await evaluate(`document.querySelector('[data-close-reconstruction-practice]').click()`);
 await pause(250);
 await evaluate(`document.querySelector('.reconstruction-drawer header [data-close-reconstruction-drawer]').click()`);
@@ -150,6 +168,6 @@ const stored = JSON.parse(await evaluate(`new Promise((resolve, reject) => {
   };
   request.onerror = () => reject(request.error);
 })`));
-console.log(JSON.stringify({ cover, hint, listOnly, practice, hintBeforeTimeout, hintAutoClosed, preference, stored, runtimeErrors }));
+console.log(JSON.stringify({ cover, hint, listOnly, practice, feedbackDismissed, redo, hintBeforeTimeout, hintAutoClosed, preference, stored, runtimeErrors }));
 socket.close();
 await fetch(`${browserBase}/json/close/${target.id}`);

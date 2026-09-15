@@ -591,7 +591,13 @@ function reconstructionPracticeMarkup(sentence) {
         </section>
         ${checked ? `<section class="standard-answer"><div><span>核对结果</span><b>${correctCount} / ${expectedWords.length} 个单词正确</b></div><p>${esc(sentence.text)}</p></section>` : ''}
       </div>
-      <footer class="reconstruction-practice-footer"><small>红色表示错误或漏词；错误词下方会显示正确答案。</small><button type="button" class="primary" data-check-reconstruction="${sentence.id}">${checked ? '重新查验' : '查验标准原文'}</button></footer>`;
+      <footer class="reconstruction-practice-footer">
+        <small>红色表示错误或漏词；重新输入时提示会自动收起。</small>
+        <div class="reconstruction-practice-actions">
+          <button type="button" class="outline" data-redo-reconstruction="${sentence.id}">重做</button>
+          <button type="button" class="primary" data-check-reconstruction="${sentence.id}">${checked ? '重新查验' : '查验标准原文'}</button>
+        </div>
+      </footer>`;
 }
 
 function normalizePracticeWord(value) {
@@ -954,6 +960,7 @@ function bind() {
   document.querySelectorAll('[data-open-reconstruction-practice]').forEach(button => button.addEventListener('click', () => openReconstructionPractice(button.dataset.openReconstructionPractice)));
   document.querySelectorAll('[data-close-reconstruction-practice]').forEach(button => button.addEventListener('click', closeReconstructionPractice));
   document.querySelectorAll('[data-check-reconstruction]').forEach(button => button.addEventListener('click', () => checkReconstructionWords(button.dataset.checkReconstruction)));
+  document.querySelectorAll('[data-redo-reconstruction]').forEach(button => button.addEventListener('click', () => redoReconstruction(button.dataset.redoReconstruction)));
   document.querySelector('[data-close-difficult-hint]')?.addEventListener('click', () => hideDifficultHint());
   document.querySelector('[data-disable-difficult-hint]')?.addEventListener('change', event => {
     if (!event.target.checked) return;
@@ -1772,9 +1779,42 @@ async function checkReconstructionWords(sentenceId) {
   render();
 }
 
+async function redoReconstruction(sentenceId) {
+  const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+  const sentence = article?.sentences.find(item => item.id === sentenceId);
+  if (!article || !sentence) return;
+  sentence.reconstructionWords = [];
+  sentence.backTranslation = '';
+  ui.practiceRevealIds.delete(sentenceId);
+  article.updatedAt = new Date().toISOString();
+  await records.put('articles', article);
+  render();
+  requestAnimationFrame(() => document.querySelector('[data-reconstruction-word="0"]')?.focus());
+}
+
+function dismissReconstructionFeedback(sentenceId, focusIndex) {
+  if (!ui.practiceRevealIds.has(sentenceId)) return;
+  const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+  if (article) collectReader(article);
+  ui.practiceRevealIds.delete(sentenceId);
+  render();
+  requestAnimationFrame(() => {
+    const nextInput = document.querySelector(`[data-reconstruction-word="${focusIndex}"]`);
+    nextInput?.focus();
+    nextInput?.setSelectionRange(nextInput.value.length, nextInput.value.length);
+  });
+}
+
 function bindReconstructionInputs() {
   const inputs = [...document.querySelectorAll('[data-reconstruction-word]')];
   inputs.forEach((input, index) => {
+    const sentenceId = input.closest('[data-reconstruction-practice]')?.dataset.reconstructionPractice;
+    input.addEventListener('pointerdown', () => {
+      if (sentenceId) dismissReconstructionFeedback(sentenceId, index);
+    });
+    input.addEventListener('input', () => {
+      if (sentenceId) dismissReconstructionFeedback(sentenceId, index);
+    });
     input.addEventListener('keydown', event => {
       if (event.key === ' ' && input.value.trim()) {
         event.preventDefault();
@@ -1791,6 +1831,14 @@ function bindReconstructionInputs() {
       if (words.length < 2) return;
       event.preventDefault();
       words.forEach((word, offset) => { if (inputs[index + offset]) inputs[index + offset].value = word; });
+      if (sentenceId && ui.practiceRevealIds.has(sentenceId)) {
+        const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+        if (article) collectReader(article);
+        ui.practiceRevealIds.delete(sentenceId);
+        render();
+        requestAnimationFrame(() => document.querySelector(`[data-reconstruction-word="${Math.min(inputs.length - 1, index + words.length)}"]`)?.focus());
+        return;
+      }
       inputs[Math.min(inputs.length - 1, index + words.length)]?.focus();
     });
   });
