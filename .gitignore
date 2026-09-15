@@ -1,0 +1,16 @@
+.env.local
+.env.*
+!.env.example
+.DS_Store
+node_modules/
+.translation-lite/
+outputs/
+work/
+*.log
+
+# Local dictionary and translation runtimes are rebuilt for browser delivery.
+data/ecdict.sqlite
+data/argos-packages/
+data/argos-data/
+data/argos-config/
+data/argos-cache/
