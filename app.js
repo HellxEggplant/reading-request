@@ -46,10 +46,22 @@ const ui = {
   wordDialog: null,
   readerSentenceIndex: 0,
   readerCardDirection: 'next',
+  webUrl: '',
+  webPage: null,
+  webSelections: [],
+  webLoading: false,
+  webError: '',
+  webArticleTitle: '',
+  webArticleLevel: 'B1',
+  pomodoroMode: 'focus',
+  pomodoroRemaining: 25 * 60,
+  pomodoroRunning: false,
+  pomodoroEndsAt: null,
 };
 
 let dbPromise;
 let difficultHintTimer;
+let pomodoroTimer;
 
 function openDatabase() {
   if (dbPromise) return dbPromise;
@@ -138,6 +150,7 @@ function shell(content) {
         `).join('')}
       </nav>
       <div class="sync-pill"><i></i><span>本地保存</span></div>
+      <button class="web-import-top" type="button" data-view="webImport"><span>⌁</span> 导入网页</button>
       <label class="upload-top">
         <input type="file" accept="application/pdf,.pdf" data-pdf-input hidden>
         <span>＋</span> 上传 PDF
@@ -206,6 +219,9 @@ function libraryPage() {
       <div class="document-grid">
         ${visibleDocuments.map(document => documentCard(document)).join('')}
         ${showUploadCard ? `
+          <button class="document-upload-card web-upload-card" type="button" data-view="webImport">
+            <span>⌁</span><b>添加网页</b><small>粘贴链接，在站内选择文章正文</small><em>IMPORT FROM URL</em>
+          </button>
           <label class="document-upload-card" id="dropZone">
             <input type="file" accept="application/pdf,.pdf" data-pdf-input hidden>
             <span>＋</span><b>添加 PDF</b><small>点击选择或拖入英文期刊与杂志</small><em>ADD TO ARCHIVE</em>
@@ -339,11 +355,7 @@ function articleEditDialog() {
 
 function sourceDialogMarkup(article) {
   const originalPages = article.regions?.length
-    ? article.regions.map((region, index) => `
-        <figure>
-          <span>${String(index + 1).padStart(2, '0')} · 第 ${region.page} 页</span>
-          <img src="${region.imageData}" alt="第 ${region.page} 页框选区域">
-        </figure>`).join('')
+    ? article.regions.map((region, index) => sourceRegionMarkup(region, index, true)).join('')
     : '<p class="source-dialog-empty">这篇文章没有保存原版框选图片。</p>';
   const extractedText = article.rawText || article.sentences.map(sentence => sentence.text).join(' ');
   return `
@@ -358,6 +370,19 @@ function sourceDialogMarkup(article) {
         </section>
       </div>
     </dialog>`;
+}
+
+function sourceRegionMarkup(region, index, dialog = false) {
+  if (region.kind === 'web') {
+    return `<figure class="web-source-region ${dialog ? 'dialog-web-source' : ''}">
+      <span>${String(index + 1).padStart(2, '0')} · WEB</span>
+      <blockquote>${esc(region.text)}</blockquote>
+    </figure>`;
+  }
+  return `<figure>
+    <span>${String(index + 1).padStart(2, '0')} · 第 ${region.page} 页</span>
+    <img src="${region.imageData}" alt="第 ${region.page} 页框选区域">
+  </figure>`;
 }
 
 function articleRow(article) {
@@ -402,6 +427,65 @@ function growthPage() {
         `).join('')}
       </div>
     </section>
+  `);
+}
+
+function webImportPage() {
+  const page = ui.webPage;
+  return shell(`
+    <section class="web-import-heading">
+      <div>
+        <button class="back-button" data-view="library">← 返回书库</button>
+        <p class="eyebrow">IMPORT FROM THE WEB</p>
+        <h1>从网页选择精读文章</h1>
+        <p>输入文章链接，载入清爽阅读版，再用鼠标选中需要精读的英文内容。</p>
+      </div>
+    </section>
+    <section class="web-url-panel">
+      <form data-web-load-form>
+        <label for="webUrlInput">文章网址</label>
+        <div><input id="webUrlInput" type="url" value="${esc(ui.webUrl)}" placeholder="https://example.com/article" required><button class="primary" type="submit" ${ui.webLoading ? 'disabled' : ''}>${ui.webLoading ? '正在读取…' : '读取网页'}</button></div>
+        <small>点击“读取网页”即表示允许把这个公开网址发送给清爽阅读服务。不会发送你的 PDF、笔记或学习记录。</small>
+      </form>
+      ${ui.webError ? `<div class="web-import-error"><b>暂时无法读取这个网页</b><p>${esc(ui.webError)}</p><div>${ui.webUrl ? `<a href="${esc(ui.webUrl)}" target="_blank" rel="noopener noreferrer">打开原网页 ↗</a>` : ''}<button type="button" data-use-manual-web>手动粘贴正文</button></div></div>` : ''}
+    </section>
+    ${page ? `
+      <div class="web-import-layout">
+        <section class="web-reader-workbench">
+          <header>
+            <div><span>WEB READER</span><h2>${esc(page.title || '网页文章')}</h2><a href="${esc(page.url)}" target="_blank" rel="noopener noreferrer">访问原网页 ↗</a></div>
+            <button class="primary" type="button" data-add-web-selection>＋ 加入选中文字</button>
+          </header>
+          <div class="web-selection-tip"><b>第一步：拖动鼠标选中文字</b><span>第二步：点击右上角“加入选中文字”。可分多次选择，顺序就是最终阅读顺序。</span></div>
+          ${page.manual ? `<textarea class="web-manual-content" id="webManualContent" placeholder="在这里粘贴英文文章正文。可以选中其中一部分后加入，也可以不选择并加入全部内容。">${esc(page.manualText || '')}</textarea>` : `
+            <article class="web-readable-content" id="webReadableContent">
+              ${page.paragraphs.map((paragraph, index) => paragraph.heading
+                ? `<h${Math.min(4, Math.max(2, paragraph.level || 2))} data-web-paragraph="${index}">${esc(paragraph.text)}</h${Math.min(4, Math.max(2, paragraph.level || 2))}>`
+                : `<p data-web-paragraph="${index}">${esc(paragraph.text)}</p>`).join('')}
+            </article>`}
+        </section>
+        <aside class="web-selection-panel">
+          <div class="region-panel-head"><span>ARTICLE BUILDER</span><b>已选 ${ui.webSelections.length} 段</b></div>
+          <label class="field-label">文章标题<input id="webArticleTitle" value="${esc(ui.webArticleTitle)}" placeholder="输入文章标题"></label>
+          <label class="field-label">CEFR 难度<select id="webArticleLevel">${CEFR.map(level => `<option ${level === ui.webArticleLevel ? 'selected' : ''}>${level}</option>`).join('')}</select></label>
+          <div class="web-selection-list">
+            ${ui.webSelections.length ? ui.webSelections.map((selection, index) => `
+              <article class="web-selection-item">
+                <header><span>${String(index + 1).padStart(2, '0')}</span><div><button type="button" data-move-web-selection="${selection.id}:-1" title="向前移动">↑</button><button type="button" data-move-web-selection="${selection.id}:1" title="向后移动">↓</button><button type="button" data-remove-web-selection="${selection.id}" title="删除">×</button></div></header>
+                <textarea data-web-selection-text="${selection.id}" aria-label="第 ${index + 1} 段网页正文">${esc(selection.text)}</textarea>
+              </article>`).join('')
+              : '<div class="region-empty"><span>⌁</span><b>尚未选择正文</b><p>在左侧文章中选中文字，再点击“加入选中文字”。</p></div>'}
+          </div>
+          <div class="region-actions">
+            <button class="outline full" type="button" data-clear-web-selections ${ui.webSelections.length ? '' : 'disabled'}>清除全部</button>
+            <button class="primary full" type="button" data-create-web-article ${ui.webSelections.length ? '' : 'disabled'}>生成逐句精读 <span>→</span></button>
+          </div>
+          <p class="privacy-note">正文、网址和学习结果仅保存在当前浏览器。请遵守来源网站的版权与使用规则。</p>
+        </aside>
+      </div>` : `
+      <section class="web-import-placeholder">
+        <span>⌁</span><h2>${ui.webLoading ? '正在整理网页文章…' : '等待输入文章链接'}</h2><p>${ui.webLoading ? '正在移除导航、广告和无关内容，请稍候。' : '支持公开英文文章；登录、付费或禁止读取的页面可能需要手动粘贴正文。'}</p>
+      </section>`}
   `);
 }
 
@@ -485,15 +569,13 @@ function readerPage() {
   return shell(`
     <section class="reader-heading">
       <div><button class="back-button" data-view="articles">← 返回精读文章</button><p class="eyebrow">${esc(article.level)} · ${esc(article.documentName)}</p><h1>${esc(article.title)}</h1></div>
-      <div class="reader-actions"><div class="reader-progress" aria-label="精读进度 ${progress}%"><div><span>精读进度</span><b>${progress}%</b></div><i><em style="width:${progress}%"></em></i></div><button class="outline reader-save-button" data-save-reader>保存</button><button class="primary reader-complete-button" data-complete-reader>${article.completed ? '已完成 ✓' : '完成精读'}</button></div>
+      <div class="reader-actions">${pomodoroMarkup()}<div class="reader-progress" aria-label="精读进度 ${progress}%"><div><span>精读进度</span><b>${progress}%</b></div><i><em style="width:${progress}%"></em></i></div><button class="outline reader-save-button" data-save-reader>保存</button><button class="primary reader-complete-button" data-complete-reader>${article.completed ? '已完成 ✓' : '完成精读'}</button></div>
     </section>
     <div class="reader-layout" style="--reader-split:${ui.readerSplit}%">
       <section class="source-pane">
-        <header><span>ORIGINAL LAYOUT</span><b>原版页面</b><small>${article.regions.length} 个框选区域</small><button class="source-header-button" data-open-source-dialog>放大查看</button></header>
+        <header><span>ORIGINAL ${article.sourceType === 'web' ? 'WEBPAGE' : 'LAYOUT'}</span><b>${article.sourceType === 'web' ? '网页原文' : '原版页面'}</b><small>${article.regions.length} 个选区</small><button class="source-header-button" data-open-source-dialog>放大查看</button></header>
         <div class="source-gallery">
-          ${article.regions.map((region, index) => `
-            <figure><span>${String(index + 1).padStart(2, '0')} · P${region.page}</span><img src="${region.imageData}" alt="第 ${region.page} 页框选区域"></figure>
-          `).join('')}
+          ${article.regions.map((region, index) => sourceRegionMarkup(region, index)).join('')}
         </div>
       </section>
       <div class="reader-divider" data-reader-divider role="separator" aria-orientation="vertical" aria-label="调整原版页面和逐句精读的宽度" aria-valuemin="30" aria-valuemax="72" aria-valuenow="${Math.round(ui.readerSplit)}" tabindex="0"><span></span></div>
@@ -522,6 +604,18 @@ function readerPage() {
     ${ui.sourceDialog ? sourceDialogMarkup(article) : ''}
     ${ui.wordDialog ? wordDialogMarkup(article) : ''}
   `);
+}
+
+function pomodoroMarkup() {
+  const minutes = Math.floor(ui.pomodoroRemaining / 60);
+  const seconds = ui.pomodoroRemaining % 60;
+  const time = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  const label = ui.pomodoroMode === 'focus' ? '专注' : '休息';
+  return `<div class="pomodoro-widget" tabindex="0" aria-label="番茄时钟，${label}${time}">
+    <div class="pomodoro-main"><span aria-hidden="true">◷</span><div><small>${label}</small><b data-pomodoro-time>${time}</b></div></div>
+    <div class="pomodoro-actions"><button type="button" data-pomodoro-toggle>${ui.pomodoroRunning ? '暂停' : '开始'}</button><button type="button" data-pomodoro-reset>重置</button></div>
+    <aside class="pomodoro-tooltip" role="tooltip"><b>什么是番茄时钟？</b><p>用 25 分钟专注精读，再休息 5 分钟。短时段可以减少分心，让阅读更容易坚持。</p><small>当前阶段：${label} · ${ui.pomodoroMode === 'focus' ? '25' : '5'} 分钟</small></aside>
+  </div>`;
 }
 
 function reconstructionSidebarMarkup(article) {
@@ -709,6 +803,7 @@ function render() {
     library: libraryPage,
     articles: articlesPage,
     growth: growthPage,
+    webImport: webImportPage,
     import: importPage,
     reader: readerPage,
   };
@@ -728,6 +823,30 @@ function bind() {
     ui.wordDialog = null;
     render();
   }));
+
+  document.querySelector('[data-web-load-form]')?.addEventListener('submit', event => {
+    event.preventDefault();
+    loadWebArticle(document.querySelector('#webUrlInput')?.value);
+  });
+  document.querySelector('#webUrlInput')?.addEventListener('input', event => { ui.webUrl = event.currentTarget.value; });
+  document.querySelector('[data-use-manual-web]')?.addEventListener('click', useManualWebImport);
+  document.querySelector('[data-add-web-selection]')?.addEventListener('click', addWebSelection);
+  document.querySelectorAll('[data-remove-web-selection]').forEach(button => button.addEventListener('click', () => {
+    collectWebSelectionText();
+    ui.webSelections = ui.webSelections.filter(item => item.id !== button.dataset.removeWebSelection);
+    render();
+  }));
+  document.querySelectorAll('[data-move-web-selection]').forEach(button => button.addEventListener('click', () => {
+    const [id, direction] = button.dataset.moveWebSelection.split(':');
+    moveWebSelection(id, Number(direction));
+  }));
+  document.querySelector('[data-clear-web-selections]')?.addEventListener('click', () => {
+    ui.webSelections = [];
+    render();
+  });
+  document.querySelector('[data-create-web-article]')?.addEventListener('click', createWebArticle);
+  document.querySelector('#webArticleTitle')?.addEventListener('input', event => { ui.webArticleTitle = event.currentTarget.value; });
+  document.querySelector('#webArticleLevel')?.addEventListener('change', event => { ui.webArticleLevel = event.currentTarget.value; });
 
   document.querySelectorAll('[data-pdf-input]').forEach(input => input.addEventListener('change', event => {
     const [file] = event.target.files;
@@ -1054,6 +1173,8 @@ function bind() {
   }
   document.querySelector('[data-save-reader]')?.addEventListener('click', () => saveReader(false));
   document.querySelector('[data-complete-reader]')?.addEventListener('click', () => saveReader(true));
+  document.querySelector('[data-pomodoro-toggle]')?.addEventListener('click', togglePomodoro);
+  document.querySelector('[data-pomodoro-reset]')?.addEventListener('click', resetPomodoro);
   document.querySelector('[data-add-sentence]')?.addEventListener('click', addSentence);
   document.querySelectorAll('[data-reader-sentence]').forEach(button => button.addEventListener('click', () => changeReaderSentence(Number(button.dataset.readerSentence))));
   if (ui.view === 'reader') queueMissingDifficultTranslations();
@@ -1077,6 +1198,241 @@ async function changeReaderSentence(direction) {
   ui.readerSentenceIndex = nextIndex;
   render();
   document.querySelector('.sentence-list')?.scrollTo({ top: 0 });
+}
+
+async function loadWebArticle(urlValue) {
+  let url;
+  try {
+    url = new URL(String(urlValue || '').trim());
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('protocol');
+  } catch {
+    return toast('请输入完整的 http:// 或 https:// 文章网址。', true);
+  }
+  ui.webUrl = url.href;
+  ui.webLoading = true;
+  ui.webError = '';
+  ui.webPage = null;
+  ui.webSelections = [];
+  render();
+  try {
+    let parsed;
+    try {
+      const response = await fetchWithTimeout(url.href, { headers: { Accept: 'text/html,application/xhtml+xml' } }, 12000);
+      if (!response.ok) throw new Error(`网页返回 ${response.status}`);
+      parsed = extractReadableHtml(await response.text(), url.href);
+      if (parsed.paragraphs.length < 2) throw new Error('正文太少');
+    } catch (directError) {
+      const readerUrl = `https://r.jina.ai/${url.href}`;
+      const response = await fetchWithTimeout(readerUrl, { headers: { Accept: 'text/plain' } }, 25000);
+      if (!response.ok) throw new Error(`清爽阅读服务返回 ${response.status}`);
+      parsed = extractReadableMarkdown(await response.text(), url.href);
+      if (parsed.paragraphs.length < 2) throw new Error('没有识别到足够的文章正文');
+    }
+    ui.webPage = parsed;
+    ui.webArticleTitle = parsed.title || url.hostname;
+    ui.webLoading = false;
+    render();
+    toast('网页已整理完成，请选择需要精读的英文内容。');
+  } catch (error) {
+    console.error(error);
+    ui.webLoading = false;
+    ui.webError = '目标网站可能需要登录、存在付费墙，或暂时禁止外部读取。你可以打开原网页复制正文，再使用手动粘贴。';
+    render();
+  }
+}
+
+async function fetchWithTimeout(url, options, timeout) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function extractReadableHtml(html, url) {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  parsed.querySelectorAll('script,style,noscript,svg,nav,header,footer,aside,form,button,dialog').forEach(element => element.remove());
+  const title = parsed.querySelector('meta[property="og:title"]')?.content?.trim()
+    || parsed.querySelector('h1')?.textContent?.trim()
+    || parsed.title?.trim()
+    || new URL(url).hostname;
+  const root = parsed.querySelector('article') || parsed.querySelector('main') || parsed.body;
+  const paragraphs = [...root.querySelectorAll('h1,h2,h3,h4,p')]
+    .map(element => ({
+      text: element.textContent.replace(/\s+/g, ' ').trim(),
+      heading: /^H[1-4]$/.test(element.tagName),
+      level: Number(element.tagName.slice(1)) || 2,
+    }))
+    .filter(item => item.text.length >= (item.heading ? 3 : 30));
+  return { title, url, paragraphs: dedupeWebParagraphs(paragraphs) };
+}
+
+function extractReadableMarkdown(markdown, url) {
+  const title = markdown.match(/^Title:\s*(.+)$/mi)?.[1]?.trim()
+    || markdown.match(/^#\s+(.+)$/m)?.[1]?.trim()
+    || new URL(url).hostname;
+  const content = markdown.includes('Markdown Content:') ? markdown.split('Markdown Content:').slice(1).join('Markdown Content:') : markdown;
+  const blocks = content.replace(/```[\s\S]*?```/g, '').split(/\n\s*\n+/);
+  const paragraphs = blocks.map(block => {
+    const clean = block
+      .replace(/^!\[[^\]]*\]\([^)]*\)\s*$/gm, '')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/[*_`>]/g, '')
+      .replace(/^\s*[-+]\s+/gm, '')
+      .replace(/\s*\n\s*/g, ' ')
+      .trim();
+    const headingMatch = clean.match(/^(#{1,4})\s*(.+)$/);
+    return headingMatch
+      ? { text: headingMatch[2].trim(), heading: true, level: headingMatch[1].length }
+      : { text: clean.replace(/^#{1,6}\s*/, ''), heading: false, level: 0 };
+  }).filter(item => item.text.length >= (item.heading ? 3 : 30) && !/^https?:\/\//i.test(item.text));
+  return { title, url, paragraphs: dedupeWebParagraphs(paragraphs) };
+}
+
+function dedupeWebParagraphs(paragraphs) {
+  const seen = new Set();
+  return paragraphs.filter(item => {
+    const key = item.text.toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 500);
+}
+
+function collectWebSelectionText() {
+  document.querySelectorAll('[data-web-selection-text]').forEach(textarea => {
+    const selection = ui.webSelections.find(item => item.id === textarea.dataset.webSelectionText);
+    if (selection) selection.text = textarea.value.trim();
+  });
+  ui.webArticleTitle = document.querySelector('#webArticleTitle')?.value.trim() || ui.webArticleTitle;
+  ui.webArticleLevel = document.querySelector('#webArticleLevel')?.value || ui.webArticleLevel;
+  const manual = document.querySelector('#webManualContent');
+  if (manual && ui.webPage) ui.webPage.manualText = manual.value;
+}
+
+function addWebSelection() {
+  collectWebSelectionText();
+  const manual = document.querySelector('#webManualContent');
+  let text = '';
+  if (manual) {
+    text = manual.value.slice(manual.selectionStart, manual.selectionEnd).trim() || manual.value.trim();
+  } else {
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    const container = document.querySelector('#webReadableContent');
+    if (range && container?.contains(range.commonAncestorContainer)) text = selection.toString().replace(/\s+/g, ' ').trim();
+  }
+  if (text.length < 10) return toast('请先在左侧文章中选中一段英文正文。', true);
+  ui.webSelections.push({ id: crypto.randomUUID(), text });
+  window.getSelection()?.removeAllRanges();
+  render();
+  toast('选中的内容已加入文章。');
+}
+
+function moveWebSelection(id, direction) {
+  collectWebSelectionText();
+  const index = ui.webSelections.findIndex(item => item.id === id);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= ui.webSelections.length) return;
+  [ui.webSelections[index], ui.webSelections[target]] = [ui.webSelections[target], ui.webSelections[index]];
+  render();
+}
+
+async function createWebArticle() {
+  collectWebSelectionText();
+  const selections = ui.webSelections.filter(selection => selection.text.trim());
+  const rawText = selections.map(selection => selection.text.trim()).join(' ');
+  if (!rawText) return toast('请先选择需要精读的网页正文。', true);
+  const sentences = splitSentences(rawText).map(text => ({
+    id: crypto.randomUUID(), text, translation: '', referenceTranslation: '', notes: '', difficult: false,
+  }));
+  const now = new Date().toISOString();
+  const sourceUrl = ui.webPage?.url || ui.webUrl;
+  const article = {
+    id: crypto.randomUUID(),
+    documentId: null,
+    documentName: new URL(sourceUrl).hostname,
+    sourceType: 'web',
+    sourceUrl,
+    title: ui.webArticleTitle.trim() || ui.webPage?.title || '未命名网页文章',
+    level: ui.webArticleLevel,
+    rawText,
+    regions: selections.map((selection, index) => ({ id: selection.id, kind: 'web', page: index + 1, text: selection.text.trim() })),
+    sentences,
+    vocabulary: [],
+    completed: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await records.put('articles', article);
+  await refreshData();
+  ui.selectedArticleId = article.id;
+  ui.readerSentenceIndex = 0;
+  ui.readerCardDirection = 'next';
+  ui.view = 'reader';
+  render();
+  toast(`网页文章已生成 ${sentences.length} 个精读句子。`);
+}
+
+function useManualWebImport() {
+  let url = ui.webUrl;
+  try { url = new URL(url).href; } catch { url = 'https://example.com/'; }
+  ui.webPage = { title: '手动粘贴网页文章', url, paragraphs: [], manual: true, manualText: '' };
+  ui.webArticleTitle = '';
+  ui.webError = '';
+  render();
+  document.querySelector('#webManualContent')?.focus();
+}
+
+function updatePomodoroDisplay() {
+  const element = document.querySelector('[data-pomodoro-time]');
+  if (!element) return;
+  const minutes = Math.floor(ui.pomodoroRemaining / 60);
+  const seconds = ui.pomodoroRemaining % 60;
+  element.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  element.closest('.pomodoro-widget')?.setAttribute('aria-label', `番茄时钟，${ui.pomodoroMode === 'focus' ? '专注' : '休息'}${element.textContent}`);
+  document.title = ui.pomodoroRunning ? `${element.textContent} · 精读任务站` : '精读任务站 · 阅读书库';
+}
+
+function tickPomodoro() {
+  if (!ui.pomodoroRunning || !ui.pomodoroEndsAt) return;
+  ui.pomodoroRemaining = Math.max(0, Math.ceil((ui.pomodoroEndsAt - Date.now()) / 1000));
+  updatePomodoroDisplay();
+  if (ui.pomodoroRemaining > 0) return;
+  clearInterval(pomodoroTimer);
+  ui.pomodoroRunning = false;
+  ui.pomodoroEndsAt = null;
+  ui.pomodoroMode = ui.pomodoroMode === 'focus' ? 'break' : 'focus';
+  ui.pomodoroRemaining = ui.pomodoroMode === 'focus' ? 25 * 60 : 5 * 60;
+  render();
+  toast(ui.pomodoroMode === 'break' ? '25 分钟专注完成，现在休息 5 分钟吧。' : '休息结束，可以开始下一轮精读。');
+}
+
+function togglePomodoro() {
+  if (ui.pomodoroRunning) {
+    ui.pomodoroRemaining = Math.max(0, Math.ceil((ui.pomodoroEndsAt - Date.now()) / 1000));
+    ui.pomodoroRunning = false;
+    ui.pomodoroEndsAt = null;
+    clearInterval(pomodoroTimer);
+  } else {
+    ui.pomodoroRunning = true;
+    ui.pomodoroEndsAt = Date.now() + ui.pomodoroRemaining * 1000;
+    clearInterval(pomodoroTimer);
+    pomodoroTimer = setInterval(tickPomodoro, 250);
+  }
+  render();
+  if (!ui.pomodoroRunning) document.title = '精读任务站 · 阅读书库';
+}
+
+function resetPomodoro() {
+  clearInterval(pomodoroTimer);
+  ui.pomodoroRunning = false;
+  ui.pomodoroEndsAt = null;
+  ui.pomodoroRemaining = ui.pomodoroMode === 'focus' ? 25 * 60 : 5 * 60;
+  render();
+  document.title = '精读任务站 · 阅读书库';
 }
 
 async function importPdf(file) {

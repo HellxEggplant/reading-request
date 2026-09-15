@@ -6187,3 +6187,304 @@ button:focus-visible {
     min-width: 0;
   }
 }
+
+/* Web article import */
+.web-import-top {
+  min-height: 39px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border: 1px solid #a9a092;
+  border-radius: 2px;
+  background: #fffdf8;
+  color: #454038;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.web-import-top:hover {
+  border-color: #9a352c;
+  color: #9a352c;
+}
+
+.web-upload-card {
+  appearance: none;
+  width: 100%;
+  font-family: inherit;
+}
+
+.web-upload-card > span {
+  border-color: #9a352c;
+  color: #9a352c;
+}
+
+.web-import-heading {
+  margin: 0 0 18px;
+  padding: 14px 0 4px;
+}
+
+.web-import-heading h1 {
+  margin: 8px 0 7px;
+  color: #211e19;
+  font: 700 clamp(28px, 3vw, 42px)/1.08 Georgia, "Songti SC", serif;
+}
+
+.web-import-heading > div > p:last-child {
+  margin: 0;
+  color: #746c62;
+  font-size: 13px;
+}
+
+.web-url-panel {
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  border: 1px solid #d0c7bb;
+  border-left: 4px solid #4d6756;
+  background: #fffdf8;
+}
+
+.web-url-panel form > label {
+  display: block;
+  margin-bottom: 8px;
+  color: #585047;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .08em;
+}
+
+.web-url-panel form > div:first-of-type {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 9px;
+}
+
+.web-url-panel input {
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #bdb3a6;
+  border-radius: 2px;
+  background: white;
+  color: #29251f;
+  font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  outline: none;
+}
+
+.web-url-panel input:focus {
+  border-color: #4d6756;
+  box-shadow: 0 0 0 3px rgba(77, 103, 86, .12);
+}
+
+.web-url-panel form > small {
+  display: block;
+  margin-top: 8px;
+  color: #857c70;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.web-import-error {
+  margin-top: 14px;
+  padding: 13px 15px;
+  border: 1px solid #d8a9a5;
+  background: #fff4f1;
+}
+
+.web-import-error b { color: #8f2723; font-size: 13px; }
+.web-import-error p { margin: 5px 0 10px; color: #675b54; font-size: 12px; }
+.web-import-error > div { display: flex; gap: 12px; align-items: center; }
+.web-import-error a,
+.web-import-error button { border: 0; background: transparent; color: #922a26; font-size: 11px; font-weight: 800; cursor: pointer; text-decoration: none; }
+
+.web-import-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 344px;
+  gap: 18px;
+  align-items: start;
+}
+
+.web-reader-workbench,
+.web-selection-panel {
+  border: 1px solid #cfc6ba;
+  background: #fffdf8;
+}
+
+.web-reader-workbench > header {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 16px 13px 20px;
+  border-bottom: 1px solid #d7cec2;
+}
+
+.web-reader-workbench > header > div { min-width: 0; display: grid; gap: 3px; }
+.web-reader-workbench > header span { color: #9a352c; font: 850 9px ui-monospace, monospace; letter-spacing: .13em; }
+.web-reader-workbench > header h2 { margin: 0; overflow: hidden; color: #24201b; font: 650 18px Georgia, "Songti SC", serif; text-overflow: ellipsis; white-space: nowrap; }
+.web-reader-workbench > header a { color: #6f675e; font-size: 10px; text-decoration: none; }
+.web-reader-workbench > header > button { flex: 0 0 auto; }
+
+.web-selection-tip {
+  display: flex;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid #ddd4c8;
+  background: #f2ede4;
+  color: #746b60;
+  font-size: 11px;
+}
+
+.web-selection-tip b { color: #4d6756; }
+
+.web-readable-content {
+  max-height: calc(100vh - 320px);
+  min-height: 440px;
+  padding: clamp(28px, 5vw, 64px) clamp(24px, 7vw, 90px);
+  overflow: auto;
+  color: #24211d;
+  cursor: text;
+  user-select: text;
+}
+
+.web-readable-content h2,
+.web-readable-content h3,
+.web-readable-content h4 {
+  margin: 1.5em 0 .65em;
+  font-family: Georgia, "Songti SC", serif;
+  line-height: 1.3;
+}
+
+.web-readable-content h2:first-child { margin-top: 0; }
+.web-readable-content p { max-width: 760px; margin: 0 auto 1.15em; font: 18px/1.9 Georgia, "Times New Roman", serif; }
+.web-readable-content h2,
+.web-readable-content h3,
+.web-readable-content h4 { max-width: 760px; margin-left: auto; margin-right: auto; }
+.web-readable-content ::selection { background: rgba(154, 53, 44, .22); color: #1d1915; }
+
+.web-manual-content {
+  width: 100%;
+  min-height: 560px;
+  padding: 34px;
+  resize: vertical;
+  border: 0;
+  background: #fffdf8;
+  color: #24211d;
+  font: 17px/1.85 Georgia, "Times New Roman", serif;
+  outline: none;
+}
+
+.web-selection-panel {
+  position: sticky;
+  top: 84px;
+  max-height: calc(100vh - 104px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.web-selection-panel > .field-label { margin: 12px 14px 0; }
+.web-selection-list { min-height: 180px; padding: 12px 14px; overflow: auto; }
+.web-selection-item { margin-bottom: 10px; border: 1px solid #d5ccc0; background: #f8f3eb; }
+.web-selection-item header { display: flex; align-items: center; justify-content: space-between; padding: 7px 8px; border-bottom: 1px solid #d9d0c4; }
+.web-selection-item header > span { color: #9a352c; font: 800 10px ui-monospace, monospace; }
+.web-selection-item header button { width: 27px; height: 25px; margin-left: 3px; border: 0; background: #eae3d8; color: #665e55; cursor: pointer; }
+.web-selection-item textarea { width: 100%; min-height: 100px; padding: 10px; resize: vertical; border: 0; background: transparent; color: #38322c; font: 13px/1.65 Georgia, serif; outline: none; }
+.web-selection-panel .region-actions { padding: 12px 14px; }
+
+.web-import-placeholder {
+  min-height: 430px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  border: 1px dashed #c5bbad;
+  background: rgba(255, 253, 248, .56);
+  text-align: center;
+}
+
+.web-import-placeholder > span { color: #9a352c; font-size: 42px; }
+.web-import-placeholder h2 { margin: 12px 0 7px; font: 650 23px Georgia, "Songti SC", serif; }
+.web-import-placeholder p { max-width: 520px; margin: 0; color: #7c7368; font-size: 12px; line-height: 1.7; }
+
+/* Web source cards inside the reader */
+.source-gallery .web-source-region,
+.source-dialog-gallery .web-source-region { background: #fffdf8; }
+.web-source-region blockquote { margin: 0; padding: 58px 28px 30px; color: #29251f; font: 17px/1.8 Georgia, "Times New Roman", serif; }
+.source-dialog-gallery .dialog-web-source { box-shadow: 0 14px 38px rgba(42, 33, 24, .14); }
+.source-dialog-gallery .dialog-web-source blockquote { padding: 62px 48px 38px; font-size: 19px; }
+
+/* Pomodoro timer */
+.pomodoro-widget {
+  position: relative;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px 5px 10px;
+  border: 1px solid #c9bfb2;
+  background: #fffdf8;
+  outline: none;
+}
+
+.pomodoro-main { display: flex; align-items: center; gap: 7px; }
+.pomodoro-main > span { color: #9a352c; font-size: 19px; }
+.pomodoro-main > div { display: grid; min-width: 47px; }
+.pomodoro-main small { color: #7b7268; font-size: 8px; font-weight: 800; letter-spacing: .1em; }
+.pomodoro-main b { color: #26211c; font: 700 16px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.pomodoro-actions { display: flex; gap: 3px; }
+.pomodoro-actions button { min-height: 30px; padding: 5px 7px; border: 0; background: #eee7dd; color: #615950; font-size: 9px; font-weight: 800; cursor: pointer; }
+.pomodoro-actions button:first-child { background: #4d6756; color: white; }
+.pomodoro-tooltip {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 280px;
+  padding: 15px 17px;
+  pointer-events: none;
+  border: 1px solid #bdb2a5;
+  border-top: 3px solid #9a352c;
+  background: #fffdf8;
+  box-shadow: 0 15px 35px rgba(43, 34, 25, .18);
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: opacity .16s ease, transform .16s ease;
+}
+.pomodoro-tooltip::before { content: ''; position: absolute; right: 22px; bottom: 100%; border: 7px solid transparent; border-bottom-color: #9a352c; }
+.pomodoro-widget:hover .pomodoro-tooltip,
+.pomodoro-widget:focus-within .pomodoro-tooltip { opacity: 1; transform: translateY(0); }
+.pomodoro-tooltip b { color: #29241e; font: 700 15px Georgia, "Songti SC", serif; }
+.pomodoro-tooltip p { margin: 7px 0 9px; color: #665e55; font-size: 11px; line-height: 1.65; }
+.pomodoro-tooltip small { color: #9a352c; font-size: 9px; font-weight: 800; }
+
+@media (max-width: 980px) {
+  .web-import-layout { grid-template-columns: 1fr; }
+  .web-selection-panel { position: static; max-height: none; }
+  .web-selection-list { max-height: 420px; }
+  .web-readable-content { max-height: 70vh; }
+  .pomodoro-widget { order: -1; }
+}
+
+@media (max-width: 760px) {
+  .web-import-top { padding-inline: 10px; }
+  .web-import-top span { display: none; }
+  .web-url-panel form > div:first-of-type { grid-template-columns: 1fr; }
+  .web-reader-workbench > header { align-items: stretch; flex-direction: column; }
+  .web-selection-tip { flex-direction: column; gap: 3px; }
+  .web-readable-content { min-height: 390px; padding: 28px 20px; }
+  .web-readable-content p { font-size: 17px; }
+  .web-manual-content { min-height: 430px; padding: 24px 18px; }
+  .reader-actions { grid-template-columns: 1fr auto auto; }
+  .pomodoro-widget { grid-column: 1 / -1; justify-content: space-between; }
+  .pomodoro-tooltip { right: auto; left: 0; width: min(280px, calc(100vw - 34px)); }
+}
+
+@media (max-width: 560px) {
+  .web-import-top { font-size: 0; }
+  .web-import-top::after { content: '网页'; font-size: 11px; }
+  .upload-top { font-size: 0; }
+  .upload-top::after { content: 'PDF'; font-size: 11px; }
+  .upload-top span { font-size: 15px; }
+}
