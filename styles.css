@@ -6433,49 +6433,65 @@ button:focus-visible {
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: 12px;
   background: transparent;
-  cursor: pointer;
-  filter: drop-shadow(0 13px 16px rgba(71, 35, 25, .2));
+  cursor: grab;
+  touch-action: none;
+  filter: drop-shadow(5px 7px 0 rgba(75, 40, 28, .18));
   transition: transform .2s ease, filter .2s ease;
 }
 
-.tomato-trigger:hover { transform: translateY(-4px) rotate(-1deg); filter: drop-shadow(0 17px 20px rgba(71, 35, 25, .25)); }
+.tomato-trigger:hover { transform: translateY(-3px); filter: drop-shadow(6px 9px 0 rgba(75, 40, 28, .2)); }
 .tomato-trigger:focus-visible { outline: 3px solid rgba(77, 103, 86, .58); outline-offset: 5px; }
+.tomato-timer.is-dragging .tomato-trigger { cursor: grabbing; transform: scale(1.05); filter: drop-shadow(8px 11px 0 rgba(75, 40, 28, .17)); }
 .tomato-progress {
   position: absolute;
-  inset: 1px;
-  border-radius: 50%;
-  background: conic-gradient(#f4d39c var(--timer-progress), rgba(255, 255, 255, .25) 0);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 0);
-  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 0);
-  opacity: .9;
+  left: 13px;
+  right: 13px;
+  bottom: 0;
+  height: 5px;
+  border: 2px solid #fff8e9;
+  background: linear-gradient(90deg, #ffd46a var(--timer-progress), #6f2d28 0);
+  box-shadow: 2px 2px 0 #4f2a24;
+  image-rendering: pixelated;
 }
 
-.tomato-illustration {
+.pixel-tomato {
   position: absolute;
-  inset: -7px;
-  display: grid;
-  place-items: center;
-  font-size: 102px;
-  line-height: 1;
-  transform: rotate(-3deg);
+  left: 7px;
+  top: 2px;
+  width: 90px;
+  height: 78px;
+  filter: drop-shadow(4px 5px 0 #6d2925);
+  image-rendering: pixelated;
   user-select: none;
 }
+
+.pixel-tomato i {
+  position: absolute;
+  left: calc(var(--pixel-x) * 6px);
+  top: calc(var(--pixel-y) * 6px);
+  width: 6px;
+  height: 6px;
+}
+.pixel-r { background: #d94738; }
+.pixel-g { background: #4f824b; }
+.pixel-h { background: #ff8e68; }
+.pixel-k { background: #4d2927; }
 
 .tomato-clock {
   position: relative;
   z-index: 2;
   min-width: 65px;
-  margin-top: 15px;
+  margin-top: 42px;
   display: grid;
   justify-items: center;
   gap: 1px;
   padding: 5px 8px 6px;
-  border: 1px solid rgba(255, 255, 255, .58);
-  border-radius: 999px;
-  background: rgba(116, 22, 19, .79);
-  box-shadow: inset 0 1px rgba(255, 255, 255, .25), 0 3px 8px rgba(66, 17, 14, .2);
+  border: 2px solid #fff8e9;
+  border-radius: 2px;
+  background: #7b2926;
+  box-shadow: 3px 3px 0 #4d2927;
   color: #fffaf2;
   backdrop-filter: blur(4px);
 }
@@ -6485,22 +6501,23 @@ button:focus-visible {
 .tomato-status {
   position: absolute;
   z-index: 3;
-  right: -2px;
-  bottom: 2px;
+  right: -4px;
+  top: 5px;
   padding: 4px 7px;
-  border: 2px solid #fffaf2;
-  border-radius: 999px;
+  border: 2px solid #fff8e9;
+  border-radius: 2px;
   background: #4d6756;
   color: white;
   font-size: 9px;
   font-weight: 850;
-  box-shadow: 0 4px 10px rgba(45, 50, 39, .2);
+  box-shadow: 3px 3px 0 #354b3a;
 }
 
-.tomato-timer.is-break .tomato-clock { background: rgba(47, 82, 58, .84); }
+.tomato-timer.is-break .tomato-clock { background: #3f674d; }
 .tomato-timer.is-break .tomato-status { background: #ad632e; }
 .tomato-timer.is-running .tomato-status::before { content: ''; display: inline-block; width: 5px; height: 5px; margin-right: 4px; border-radius: 50%; background: #dff0d6; vertical-align: 1px; }
 .tomato-timer.is-running .tomato-trigger { animation: tomato-breathe 2.8s ease-in-out infinite; }
+.tomato-timer.is-dragging .tomato-trigger { animation: none; }
 
 .tomato-panel {
   position: absolute;
@@ -6511,9 +6528,10 @@ button:focus-visible {
   visibility: hidden;
   pointer-events: none;
   border: 1px solid #c8bcae;
-  border-radius: 13px;
-  background: rgba(255, 253, 248, .98);
-  box-shadow: 0 21px 54px rgba(47, 37, 27, .2);
+  border: 3px solid #4d2927;
+  border-radius: 3px;
+  background: #fff9eb;
+  box-shadow: 8px 8px 0 rgba(77, 41, 39, .2);
   opacity: 0;
   transform: translateY(8px) scale(.97);
   transform-origin: right bottom;
@@ -6527,27 +6545,33 @@ button:focus-visible {
   top: 100%;
   width: 14px;
   height: 14px;
-  border-right: 1px solid #c8bcae;
-  border-bottom: 1px solid #c8bcae;
-  background: #fffdf8;
+  border-right: 3px solid #4d2927;
+  border-bottom: 3px solid #4d2927;
+  background: #fff9eb;
   transform: translateY(-7px) rotate(45deg);
 }
 
 .tomato-timer:hover .tomato-panel,
 .tomato-timer:focus-within .tomato-panel,
 .tomato-timer.is-open .tomato-panel { visibility: visible; pointer-events: auto; opacity: 1; transform: translateY(0) scale(1); }
+.tomato-timer.is-dragging .tomato-panel { visibility: hidden; pointer-events: none; opacity: 0; }
+.tomato-timer.panel-left .tomato-panel { right: auto; left: 0; transform-origin: left bottom; }
+.tomato-timer.panel-left .tomato-panel::after { right: auto; left: 38px; }
+.tomato-timer.panel-below .tomato-panel { top: calc(100% + 14px); bottom: auto; transform-origin: right top; }
+.tomato-timer.panel-below.panel-left .tomato-panel { transform-origin: left top; }
+.tomato-timer.panel-below .tomato-panel::after { top: auto; bottom: 100%; border: 0; border-left: 3px solid #4d2927; border-top: 3px solid #4d2927; transform: translateY(7px) rotate(45deg); }
 .tomato-panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .tomato-panel header > div { display: grid; gap: 2px; }
 .tomato-panel header span { color: #9a352c; font: 800 9px/1 ui-monospace, monospace; letter-spacing: .14em; }
 .tomato-panel header b { color: #28231e; font: 700 19px/1.35 Georgia, "Songti SC", serif; }
-.tomato-panel header em { padding: 5px 7px; border-radius: 999px; background: #f0e5d9; color: #8b3b30; font: 800 9px/1 ui-monospace, monospace; font-style: normal; }
+.tomato-panel header em { padding: 5px 7px; border: 2px solid #d6bfa6; border-radius: 2px; background: #f0e5d9; color: #8b3b30; font: 800 9px/1 ui-monospace, monospace; font-style: normal; box-shadow: 2px 2px 0 #d6bfa6; }
 .tomato-panel p { margin: 10px 0 12px; color: #6c6359; font-size: 12px; line-height: 1.7; }
-.tomato-panel-progress { height: 6px; overflow: hidden; border-radius: 999px; background: #e8dfd3; }
-.tomato-panel-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #bc332c, #dd7b4b); transition: width .25s linear; }
+.tomato-panel-progress { height: 9px; overflow: hidden; border: 2px solid #4d2927; border-radius: 0; background: #e8dfd3; }
+.tomato-panel-progress i { display: block; height: 100%; background: #d94738; transition: width .25s linear; }
 .tomato-timer.is-break .tomato-panel-progress i { background: linear-gradient(90deg, #4d6756, #8aa174); }
 .tomato-actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 14px; }
-.tomato-actions button { min-height: 38px; padding: 8px 14px; border: 1px solid #c8bcae; border-radius: 6px; background: #f4eee5; color: #5f574e; font-size: 12px; font-weight: 800; cursor: pointer; }
-.tomato-actions .primary { border-color: #a92e28; background: #b8322b; color: white; }
+.tomato-actions button { min-height: 38px; padding: 8px 14px; border: 2px solid #4d2927; border-radius: 2px; background: #f4eee5; color: #5f574e; font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: 3px 3px 0 #d8c5b0; }
+.tomato-actions .primary { border-color: #4d2927; background: #d94738; color: white; box-shadow: 3px 3px 0 #7b2926; }
 .tomato-actions button:hover { filter: brightness(.97); }
 
 @keyframes tomato-breathe {
@@ -6574,8 +6598,8 @@ button:focus-visible {
   .reader-actions { grid-template-columns: 1fr auto auto; }
   .tomato-timer { right: 15px; bottom: 76px; width: 88px; height: 88px; }
   .tomato-trigger { width: 88px; height: 88px; }
-  .tomato-illustration { font-size: 86px; }
-  .tomato-clock { min-width: 58px; margin-top: 13px; padding: 4px 7px 5px; }
+  .pixel-tomato { left: 0; top: -3px; transform: scale(.87); transform-origin: top left; }
+  .tomato-clock { min-width: 58px; margin-top: 34px; padding: 4px 7px 5px; }
   .tomato-clock b { font-size: 15px; }
   .tomato-status { right: -1px; bottom: -1px; }
   .tomato-panel { width: min(300px, calc(100vw - 30px)); }

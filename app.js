@@ -64,6 +64,7 @@ const ui = {
 let dbPromise;
 let difficultHintTimer;
 let pomodoroTimer;
+let tomatoWasDragged = false;
 
 function openDatabase() {
   if (dbPromise) return dbPromise;
@@ -798,10 +799,25 @@ function pomodoroMarkup() {
   const label = ui.pomodoroMode === 'focus' ? '专注' : '休息';
   const duration = ui.pomodoroMode === 'focus' ? 25 * 60 : 5 * 60;
   const progress = Math.max(0, Math.min(100, (duration - ui.pomodoroRemaining) / duration * 100));
+  const sprite = [
+    '......ggg......',
+    '....ggggggg....',
+    '...ggggggggg...',
+    '..rrrrrrrrrrr..',
+    '.rrhhrrrrrrrrr.',
+    'rrrrkrrrrrkrrrr',
+    'rrrrrrrrrrrrrrr',
+    'rrrrrrrrrrrrrrr',
+    '.rrrrkrrrkrrrr.',
+    '.rrrrrkkkrrrrr.',
+    '..rrrrrrrrrrr..',
+    '...rrrrrrrrr...',
+    '.....rrrrr.....',
+  ].flatMap((row, y) => [...row].map((color, x) => color === '.' ? '' : `<i class="pixel-${color}" style="--pixel-x:${x};--pixel-y:${y}"></i>`)).join('');
   return `<aside class="tomato-timer ${ui.pomodoroRunning ? 'is-running' : ''} ${ui.pomodoroMode === 'break' ? 'is-break' : ''} ${ui.pomodoroPanelOpen ? 'is-open' : ''}">
     <button class="tomato-trigger" type="button" data-pomodoro-panel-toggle aria-expanded="${ui.pomodoroPanelOpen}" aria-label="番茄时钟，${label} ${time}，打开计时控制">
       <span class="tomato-progress" style="--timer-progress:${progress}%" aria-hidden="true"></span>
-      <span class="tomato-illustration" aria-hidden="true">🍅</span>
+      <span class="pixel-tomato" aria-hidden="true">${sprite}</span>
       <span class="tomato-clock"><small>${label}</small><b data-pomodoro-time>${time}</b></span>
       <span class="tomato-status" aria-hidden="true">${ui.pomodoroRunning ? '计时中' : '待开始'}</span>
     </button>
@@ -1373,14 +1389,99 @@ function bind() {
   document.querySelector('[data-save-reader]')?.addEventListener('click', () => saveReader(false));
   document.querySelector('[data-complete-reader]')?.addEventListener('click', () => saveReader(true));
   document.querySelector('[data-pomodoro-panel-toggle]')?.addEventListener('click', () => {
+    if (tomatoWasDragged) {
+      tomatoWasDragged = false;
+      return;
+    }
     ui.pomodoroPanelOpen = !ui.pomodoroPanelOpen;
     render();
   });
+  bindPomodoroDrag();
   document.querySelector('[data-pomodoro-toggle]')?.addEventListener('click', togglePomodoro);
   document.querySelector('[data-pomodoro-reset]')?.addEventListener('click', resetPomodoro);
   document.querySelector('[data-add-sentence]')?.addEventListener('click', addSentence);
   document.querySelectorAll('[data-reader-sentence]').forEach(button => button.addEventListener('click', () => changeReaderSentence(Number(button.dataset.readerSentence))));
   if (ui.view === 'reader') queueMissingDifficultTranslations();
+}
+
+function tomatoPositionBounds(timer) {
+  const margin = window.innerWidth <= 760 ? 10 : 14;
+  return {
+    minX: margin,
+    minY: margin,
+    maxX: Math.max(margin, window.innerWidth - timer.offsetWidth - margin),
+    maxY: Math.max(margin, window.innerHeight - timer.offsetHeight - margin),
+  };
+}
+
+function updateTomatoPanelDirection(timer) {
+  const rect = timer.getBoundingClientRect();
+  timer.classList.toggle('panel-below', rect.top < 260);
+  timer.classList.toggle('panel-left', rect.left < 320);
+}
+
+function applySavedTomatoPosition(timer) {
+  try {
+    const saved = JSON.parse(localStorage.getItem('reading-request-tomato-position'));
+    if (!Number.isFinite(saved?.x) || !Number.isFinite(saved?.y)) return updateTomatoPanelDirection(timer);
+    const bounds = tomatoPositionBounds(timer);
+    timer.style.left = `${bounds.minX + saved.x * (bounds.maxX - bounds.minX)}px`;
+    timer.style.top = `${bounds.minY + saved.y * (bounds.maxY - bounds.minY)}px`;
+    timer.style.right = 'auto';
+    timer.style.bottom = 'auto';
+  } catch {}
+  updateTomatoPanelDirection(timer);
+}
+
+function saveTomatoPosition(timer) {
+  const bounds = tomatoPositionBounds(timer);
+  const rect = timer.getBoundingClientRect();
+  const x = bounds.maxX === bounds.minX ? 0 : (rect.left - bounds.minX) / (bounds.maxX - bounds.minX);
+  const y = bounds.maxY === bounds.minY ? 0 : (rect.top - bounds.minY) / (bounds.maxY - bounds.minY);
+  try {
+    localStorage.setItem('reading-request-tomato-position', JSON.stringify({ x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) }));
+  } catch {}
+}
+
+function bindPomodoroDrag() {
+  const timer = document.querySelector('.tomato-timer');
+  const trigger = timer?.querySelector('.tomato-trigger');
+  if (!timer || !trigger) return;
+  applySavedTomatoPosition(timer);
+  let drag = null;
+  trigger.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return;
+    const rect = timer.getBoundingClientRect();
+    drag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, left: rect.left, top: rect.top, moved: false };
+    trigger.setPointerCapture(event.pointerId);
+    timer.classList.add('is-dragging');
+  });
+  trigger.addEventListener('pointermove', event => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+    drag.moved = true;
+    tomatoWasDragged = true;
+    const bounds = tomatoPositionBounds(timer);
+    timer.style.left = `${Math.max(bounds.minX, Math.min(bounds.maxX, drag.left + dx))}px`;
+    timer.style.top = `${Math.max(bounds.minY, Math.min(bounds.maxY, drag.top + dy))}px`;
+    timer.style.right = 'auto';
+    timer.style.bottom = 'auto';
+    updateTomatoPanelDirection(timer);
+  });
+  const endDrag = event => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (trigger.hasPointerCapture(event.pointerId)) trigger.releasePointerCapture(event.pointerId);
+    timer.classList.remove('is-dragging');
+    if (drag.moved) {
+      saveTomatoPosition(timer);
+      setTimeout(() => { tomatoWasDragged = false; }, 0);
+    }
+    drag = null;
+  };
+  trigger.addEventListener('pointerup', endDrag);
+  trigger.addEventListener('pointercancel', endDrag);
 }
 
 function queueMissingDifficultTranslations() {
