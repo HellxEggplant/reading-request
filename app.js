@@ -11,6 +11,15 @@ const DB_NAME = 'readquest-library';
 const DB_VERSION = 2;
 const CEFR = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
+function readBrowserSetting(scope, key, fallback = '') {
+  try {
+    const storage = scope === 'session' ? sessionStorage : localStorage;
+    return storage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 const ui = {
   view: 'library',
   documents: [],
@@ -59,6 +68,10 @@ const ui = {
   pomodoroRunning: false,
   pomodoroEndsAt: null,
   pomodoroPanelOpen: false,
+  translationSettingsOpen: false,
+  translationProvider: readBrowserSetting('local', 'readquest-translation-provider', 'mymemory'),
+  aiApiKey: readBrowserSetting('session', 'readquest-openai-api-key'),
+  aiModel: readBrowserSetting('local', 'readquest-openai-model', 'gpt-5.6-luna'),
 };
 
 let dbPromise;
@@ -158,6 +171,7 @@ function shell(content) {
         `).join('')}
       </nav>
       <div class="sync-pill"><i></i><span>本地保存</span></div>
+      <button class="translation-settings-button" type="button" data-open-translation-settings><span>译</span> 译文设置</button>
       <details class="resource-upload-menu">
         <summary><span>＋</span> 上传资料</summary>
         <div class="resource-upload-options">
@@ -174,7 +188,32 @@ function shell(content) {
     <div class="app-shell">
       <main class="main">${content}</main>
     </div>
+    ${translationSettingsDialog()}
   `;
+}
+
+function translationSettingsDialog() {
+  if (!ui.translationSettingsOpen) return '';
+  const aiSelected = ui.translationProvider === 'openai';
+  return `<dialog class="translation-settings-dialog" open aria-labelledby="translationSettingsTitle">
+    <form data-translation-settings-form>
+      <header><div><span>REFERENCE TRANSLATION</span><h2 id="translationSettingsTitle">参考译文设置</h2><p>选择生成参考译文时使用的翻译服务。</p></div><button type="button" data-close-translation-settings aria-label="关闭设置">×</button></header>
+      <div class="translation-provider-options" role="radiogroup" aria-label="参考译文服务">
+        <label class="${aiSelected ? '' : 'selected'}"><input type="radio" name="translationProvider" value="mymemory" ${aiSelected ? '' : 'checked'}><span><b>MyMemory</b><small>默认选项 · 免费在线机器翻译</small></span><em>DEFAULT</em></label>
+        <label class="${aiSelected ? 'selected' : ''}"><input type="radio" name="translationProvider" value="openai" ${aiSelected ? 'checked' : ''}><span><b>OpenAI API</b><small>结合语境生成更自然的参考译文</small></span><em>AI</em></label>
+      </div>
+      <section class="ai-translation-settings ${aiSelected ? 'visible' : ''}">
+        <label>API 密钥<input id="translationApiKey" type="password" value="${esc(ui.aiApiKey)}" placeholder="sk-proj-…" autocomplete="new-password" spellcheck="false"></label>
+        <label>翻译模型<select id="translationAiModel">
+          <option value="gpt-5.6-luna" ${ui.aiModel === 'gpt-5.6-luna' ? 'selected' : ''}>GPT-5.6 Luna · 快速经济</option>
+          <option value="gpt-5.6-terra" ${ui.aiModel === 'gpt-5.6-terra' ? 'selected' : ''}>GPT-5.6 Terra · 质量均衡</option>
+          <option value="gpt-5.6-sol" ${ui.aiModel === 'gpt-5.6-sol' ? 'selected' : ''}>GPT-5.6 Sol · 更高质量</option>
+        </select></label>
+        <p><b>密钥安全提示</b> 密钥仅保留在当前标签页，关闭后自动清除，不会写入 GitHub 或书库备份。请勿在公共或不可信设备上填写。</p>
+      </section>
+      <footer><button class="outline" type="button" data-close-translation-settings>取消</button><button class="primary" type="submit">保存设置</button></footer>
+    </form>
+  </dialog>`;
 }
 
 function libraryPage() {
@@ -977,6 +1016,7 @@ function sentenceCard(sentence, index, article) {
   const checkOpen = ui.translationCheckIds.has(sentence.id);
   const reference = sentence.referenceTranslation || '';
   const generation = ui.translationGeneration.get(sentence.id);
+  const referenceService = ui.translationProvider === 'openai' ? 'OpenAI AI 翻译' : 'MyMemory 在线翻译';
   return `
     <article class="sentence-card ${difficult}" data-sentence-id="${sentence.id}">
       <header><span>${String(index + 1).padStart(2, '0')}</span><button data-toggle-difficult="${sentence.id}">${sentence.difficult ? '◆ 已标记长难句' : '◇ 标记长难句'}</button></header>
@@ -994,7 +1034,7 @@ function sentenceCard(sentence, index, article) {
             <label class="reference-translation-only"><span>参考译文</span><textarea data-reference-translation placeholder="正在等待生成，也可以直接填写…" ${generation?.status === 'loading' ? 'aria-busy="true"' : ''}>${esc(reference)}</textarea></label>
             ${generation?.status === 'loading' ? '<p class="translation-generating"><i></i>在线翻译正在生成，首次使用可能需要几秒钟。</p>' : ''}
             ${generation?.status === 'error' ? `<p class="translation-generation-error">${esc(generation.error)}</p>` : ''}
-            <footer><small>MyMemory 在线生成 · 结果仅供核对，可修改。</small><div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
+            <footer><small>${referenceService} · 结果仅供核对，可修改。 <button type="button" data-open-translation-settings>更改设置</button></small><div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
           </div>` : ''}
       </section>
       <details><summary>校对识别文字</summary><textarea data-sentence-text>${esc(sentence.text)}</textarea></details>
@@ -1026,6 +1066,21 @@ function render() {
 }
 
 function bind() {
+  document.querySelectorAll('[data-open-translation-settings]').forEach(button => button.addEventListener('click', () => {
+    ui.translationSettingsOpen = true;
+    render();
+  }));
+  document.querySelectorAll('[data-close-translation-settings]').forEach(button => button.addEventListener('click', () => {
+    ui.translationSettingsOpen = false;
+    render();
+  }));
+  document.querySelectorAll('input[name="translationProvider"]').forEach(input => input.addEventListener('change', event => {
+    const dialog = event.target.closest('.translation-settings-dialog');
+    dialog?.querySelectorAll('.translation-provider-options label').forEach(label => label.classList.toggle('selected', label.contains(event.target)));
+    dialog?.querySelector('.ai-translation-settings')?.classList.toggle('visible', event.target.value === 'openai');
+  }));
+  document.querySelector('[data-translation-settings-form]')?.addEventListener('submit', saveTranslationSettings);
+
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
     ui.view = button.dataset.view;
     ui.selectedArticleId = null;
@@ -2570,13 +2625,70 @@ function bindReconstructionInputs() {
   });
 }
 
+function saveTranslationSettings(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const provider = form.querySelector('input[name="translationProvider"]:checked')?.value || 'mymemory';
+  const apiKey = form.querySelector('#translationApiKey')?.value.trim() || '';
+  const model = form.querySelector('#translationAiModel')?.value || 'gpt-5.6-luna';
+  if (provider === 'openai' && !apiKey) {
+    toast('选择 OpenAI API 时需要填写 API 密钥。', true);
+    form.querySelector('#translationApiKey')?.focus();
+    return;
+  }
+  ui.translationProvider = provider;
+  ui.aiApiKey = apiKey;
+  ui.aiModel = model;
+  ui.translationSettingsOpen = false;
+  try {
+    localStorage.setItem('readquest-translation-provider', provider);
+    localStorage.setItem('readquest-openai-model', model);
+    if (apiKey) sessionStorage.setItem('readquest-openai-api-key', apiKey);
+    else sessionStorage.removeItem('readquest-openai-api-key');
+  } catch {}
+  render();
+  toast(provider === 'openai' ? '参考译文已切换为 OpenAI AI 翻译。' : '参考译文已切换为 MyMemory。');
+}
+
+async function requestOpenAiTranslation(article, sentence) {
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${ui.aiApiKey}`,
+    },
+    body: JSON.stringify({
+      model: ui.aiModel || 'gpt-5.6-luna',
+      store: false,
+      max_output_tokens: 300,
+      instructions: '你是一名严谨的英语精读教师。把目标英文句子翻译成自然、准确的简体中文；忠实保留原句逻辑、语气和关键信息，长难句要体现从句关系。只输出一条中文译文，不要解释、序号、引号或其他内容。',
+      input: `文章标题：${article.title}\n目标句子：${sentence.text.trim()}`,
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('OpenAI API 密钥无效，请在“译文设置”中检查。');
+    if (response.status === 429) throw new Error('OpenAI API 当前额度不足或请求过快，请稍后重试。');
+    throw new Error(data.error?.message || `OpenAI API 请求失败（${response.status}）。`);
+  }
+  const outputText = String(data.output_text || data.output?.flatMap(item => item.content || []).find(item => item.type === 'output_text')?.text || '').trim();
+  if (!outputText) throw new Error('OpenAI API 没有返回可用的参考译文。');
+  return outputText.replace(/^\s*[“"]|[”"]\s*$/g, '').trim();
+}
+
 async function generateReferenceTranslation(sentenceId, regenerate = false) {
   const article = ui.articles.find(item => item.id === ui.selectedArticleId);
   if (!article) return;
   collectReader(article);
   const sentence = article.sentences.find(item => item.id === sentenceId);
   if (!sentence?.text?.trim() || (!regenerate && sentence.referenceTranslation?.trim())) return;
-  if (localStorage.getItem('readquest-mymemory-consent') !== '1') {
+  if (ui.translationProvider === 'openai' && !ui.aiApiKey) {
+    ui.translationGeneration.set(sentenceId, { status: 'error', error: '请先在“译文设置”中填写 OpenAI API 密钥。' });
+    ui.translationSettingsOpen = true;
+    render();
+    return;
+  }
+  if (ui.translationProvider === 'mymemory' && localStorage.getItem('readquest-mymemory-consent') !== '1') {
     const allowed = window.confirm('生成参考译文需要把当前英文句子发送到 MyMemory 在线翻译服务。只发送这一句英文，不发送 PDF、笔记或个人信息。是否允许？');
     if (!allowed) {
       ui.translationGeneration.set(sentenceId, { status: 'error', error: '未启用在线翻译。你仍可手动填写参考译文。' });
@@ -2589,13 +2701,18 @@ async function generateReferenceTranslation(sentenceId, regenerate = false) {
   render();
   try {
     const sourceText = sentence.text.trim();
-    if (new TextEncoder().encode(sourceText).length > 500) throw new Error('这个句子超过在线翻译的 500 字节限制，请手动填写参考译文。');
-    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(sourceText)}&langpair=en%7Czh-CN`);
-    const data = await response.json().catch(() => ({}));
-    const translatedText = String(data.responseData?.translatedText || '').trim();
-    if (!response.ok || data.responseStatus !== 200 || !translatedText) throw new Error(data.responseDetails || '没有生成可用的参考译文。');
+    let translatedText;
+    if (ui.translationProvider === 'openai') {
+      translatedText = await requestOpenAiTranslation(article, sentence);
+    } else {
+      if (new TextEncoder().encode(sourceText).length > 500) throw new Error('这个句子超过 MyMemory 的 500 字节限制，请切换 AI 翻译或手动填写。');
+      const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(sourceText)}&langpair=en%7Czh-CN`);
+      const data = await response.json().catch(() => ({}));
+      translatedText = String(data.responseData?.translatedText || '').trim();
+      if (!response.ok || data.responseStatus !== 200 || !translatedText) throw new Error(data.responseDetails || '没有生成可用的参考译文。');
+    }
     sentence.referenceTranslation = translatedText;
-    sentence.referenceTranslationSource = 'MyMemory 在线翻译';
+    sentence.referenceTranslationSource = ui.translationProvider === 'openai' ? `OpenAI · ${ui.aiModel}` : 'MyMemory 在线翻译';
     sentence.referenceTranslationGeneratedAt = new Date().toISOString();
     article.updatedAt = new Date().toISOString();
     await records.put('articles', article);
