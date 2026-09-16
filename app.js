@@ -187,14 +187,13 @@ function shell(content) {
     <div class="app-shell">
       <main class="main">${content}</main>
     </div>
-    ${translationSettingsDialog()}
   `;
 }
 
 function translationSettingsDialog() {
   if (!ui.translationSettingsOpen) return '';
   const aiSelected = ui.translationProvider === 'openai';
-  return `<dialog class="translation-settings-dialog" open aria-labelledby="translationSettingsTitle">
+  return `<aside class="translation-settings-popover" aria-labelledby="translationSettingsTitle">
     <form data-translation-settings-form>
       <header><div><span>REFERENCE TRANSLATION</span><h2 id="translationSettingsTitle">参考译文设置</h2><p>选择生成参考译文时使用的翻译服务。</p></div><button type="button" data-close-translation-settings aria-label="关闭设置">×</button></header>
       <div class="translation-provider-options" role="radiogroup" aria-label="参考译文服务">
@@ -212,7 +211,7 @@ function translationSettingsDialog() {
       </section>
       <footer><button class="outline" type="button" data-close-translation-settings>取消</button><button class="primary" type="submit">保存设置</button></footer>
     </form>
-  </dialog>`;
+  </aside>`;
 }
 
 function libraryPage() {
@@ -1033,7 +1032,7 @@ function sentenceCard(sentence, index, article) {
             <label class="reference-translation-only"><span>参考译文</span><textarea data-reference-translation placeholder="正在等待生成，也可以直接填写…" ${generation?.status === 'loading' ? 'aria-busy="true"' : ''}>${esc(reference)}</textarea></label>
             ${generation?.status === 'loading' ? '<p class="translation-generating"><i></i>在线翻译正在生成，首次使用可能需要几秒钟。</p>' : ''}
             ${generation?.status === 'error' ? `<p class="translation-generation-error">${esc(generation.error)}</p>` : ''}
-            <footer><small class="translation-source-line"><span>${referenceService} · 结果仅供核对，可修改。</span><button class="translation-settings-gear" type="button" data-open-translation-settings aria-label="翻译模型设置"><b aria-hidden="true">⚙</b><i role="tooltip">翻译模型设置</i></button></small><div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
+            <footer><small class="translation-source-line"><span>${referenceService} · 结果仅供核对，可修改。</span><button class="translation-settings-gear" type="button" data-open-translation-settings aria-label="翻译模型设置" aria-expanded="${ui.translationSettingsOpen}"><b aria-hidden="true">⚙</b><i role="tooltip">翻译模型设置</i></button></small>${translationSettingsDialog()}<div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
           </div>` : ''}
       </section>
       <details><summary>校对识别文字</summary><textarea data-sentence-text>${esc(sentence.text)}</textarea></details>
@@ -1066,7 +1065,7 @@ function render() {
 
 function bind() {
   document.querySelectorAll('[data-open-translation-settings]').forEach(button => button.addEventListener('click', () => {
-    ui.translationSettingsOpen = true;
+    ui.translationSettingsOpen = !ui.translationSettingsOpen;
     render();
   }));
   document.querySelectorAll('[data-close-translation-settings]').forEach(button => button.addEventListener('click', () => {
@@ -1074,7 +1073,7 @@ function bind() {
     render();
   }));
   document.querySelectorAll('input[name="translationProvider"]').forEach(input => input.addEventListener('change', event => {
-    const dialog = event.target.closest('.translation-settings-dialog');
+    const dialog = event.target.closest('.translation-settings-popover');
     dialog?.querySelectorAll('.translation-provider-options label').forEach(label => label.classList.toggle('selected', label.contains(event.target)));
     dialog?.querySelector('.ai-translation-settings')?.classList.toggle('visible', event.target.value === 'openai');
   }));

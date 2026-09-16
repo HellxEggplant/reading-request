@@ -6714,9 +6714,14 @@ button:focus-visible {
 }
 
 /* Reference translation settings */
-.translation-settings-dialog {
-  width: min(620px, calc(100vw - 30px));
-  max-height: calc(100vh - 32px);
+.translation-settings-popover {
+  position: absolute;
+  z-index: 24;
+  right: 0;
+  left: auto;
+  bottom: calc(100% + 10px);
+  width: min(500px, calc(100vw - 60px));
+  max-height: min(620px, calc(100vh - 100px));
   padding: 0;
   overflow: auto;
   border: 1px solid #a99e90;
@@ -6724,11 +6729,19 @@ button:focus-visible {
   border-radius: 2px;
   background: #f7f2e9;
   color: #29241f;
-  box-shadow: 0 30px 90px rgba(31, 25, 18, .32);
+  box-shadow: 0 22px 56px rgba(31, 25, 18, .25);
+  animation: translation-popover-in .16s ease-out;
 }
 
-.translation-settings-dialog::backdrop { background: rgba(25, 21, 17, .68); backdrop-filter: blur(5px); }
-.translation-settings-dialog form > header {
+.translation-settings-popover::after {
+  position: absolute;
+  top: 100%;
+  left: 198px;
+  border: 8px solid transparent;
+  border-top-color: #a99e90;
+  content: '';
+}
+.translation-settings-popover form > header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -6737,10 +6750,10 @@ button:focus-visible {
   border-bottom: 1px solid #cec4b6;
   background: #fffdf8;
 }
-.translation-settings-dialog header span { color: #9a352c; font: 800 9px/1 ui-monospace, monospace; letter-spacing: .14em; }
-.translation-settings-dialog h2 { margin: 5px 0 4px; font: 700 26px/1.2 Georgia, "Songti SC", serif; }
-.translation-settings-dialog header p { margin: 0; color: #766e63; font-size: 12px; }
-.translation-settings-dialog header button { width: 34px; height: 34px; border: 1px solid #c9bfb2; background: #f5efe7; color: #554e46; font-size: 20px; }
+.translation-settings-popover header span { color: #9a352c; font: 800 9px/1 ui-monospace, monospace; letter-spacing: .14em; }
+.translation-settings-popover h2 { margin: 5px 0 4px; font: 700 24px/1.2 Georgia, "Songti SC", serif; }
+.translation-settings-popover header p { margin: 0; color: #766e63; font-size: 12px; }
+.translation-settings-popover header button { width: 32px; height: 32px; border: 1px solid #c9bfb2; background: #f5efe7; color: #554e46; font-size: 19px; }
 .translation-provider-options { display: grid; gap: 9px; padding: 18px 23px; }
 .translation-provider-options label {
   display: grid;
@@ -6766,9 +6779,10 @@ button:focus-visible {
 .ai-translation-settings select { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #c9bfb2; background: white; color: #29241f; font-size: 13px; }
 .ai-translation-settings > p { margin: 2px 0 0; padding: 10px 11px; border-left: 3px solid #ad632e; background: #f6ead9; color: #695f54; font-size: 10px; line-height: 1.65; }
 .ai-translation-settings > p b { color: #8e2924; }
-.translation-settings-dialog form > footer { display: flex; justify-content: flex-end; gap: 9px; padding: 15px 23px 19px; border-top: 1px solid #d5ccbf; }
-.translation-settings-dialog footer button { min-height: 40px; padding: 9px 17px; }
+.translation-settings-popover form > footer { position: static; display: flex; justify-content: flex-end; gap: 9px; padding: 15px 23px 19px; border-top: 1px solid #d5ccbf; }
+.translation-settings-popover footer button { min-height: 40px; padding: 9px 17px; }
 .translation-source-line { display: inline-flex; align-items: center; gap: 8px; }
+.translation-check-body > footer { position: relative; }
 .translation-check-body > footer .translation-settings-gear {
   position: relative;
   width: 30px;
@@ -6808,10 +6822,24 @@ button:focus-visible {
 .translation-settings-gear:hover i,
 .translation-settings-gear:focus-visible i { opacity: 1; transform: translate(-50%, 0); }
 
+@keyframes translation-popover-in {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @media (max-width: 560px) {
-  .translation-settings-dialog form > header,
+  .translation-settings-popover {
+    position: fixed;
+    right: 14px;
+    bottom: 76px;
+    left: 14px;
+    width: auto;
+    max-height: calc(100vh - 100px);
+  }
+  .translation-settings-popover::after { display: none; }
+  .translation-settings-popover form > header,
   .translation-provider-options,
-  .translation-settings-dialog form > footer { padding-inline: 16px; }
+  .translation-settings-popover form > footer { padding-inline: 16px; }
   .ai-translation-settings { margin-inline: 16px; }
   .resource-upload-menu > summary {
     padding-inline: 10px;
