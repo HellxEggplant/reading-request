@@ -1397,6 +1397,13 @@ function bind() {
     render();
   });
   bindPomodoroDrag();
+  const tomatoTimer = document.querySelector('.tomato-timer');
+  tomatoTimer?.addEventListener('mouseleave', () => {
+    ui.pomodoroPanelOpen = false;
+    tomatoTimer.classList.remove('is-open');
+    tomatoTimer.querySelector('[data-pomodoro-panel-toggle]')?.setAttribute('aria-expanded', 'false');
+    if (tomatoTimer.contains(document.activeElement)) document.activeElement.blur();
+  });
   document.querySelector('[data-pomodoro-toggle]')?.addEventListener('click', togglePomodoro);
   document.querySelector('[data-pomodoro-reset]')?.addEventListener('click', resetPomodoro);
   document.querySelector('[data-add-sentence]')?.addEventListener('click', addSentence);
@@ -1775,6 +1782,7 @@ function togglePomodoro() {
     clearInterval(pomodoroTimer);
     pomodoroTimer = setInterval(tickPomodoro, 250);
   }
+  ui.pomodoroPanelOpen = false;
   render();
   if (!ui.pomodoroRunning) document.title = '精读任务站 · 阅读书库';
 }

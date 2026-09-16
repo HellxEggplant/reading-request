@@ -6522,12 +6522,11 @@ button:focus-visible {
 .tomato-panel {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 14px);
+  bottom: 100%;
   width: 300px;
   padding: 18px;
   visibility: hidden;
   pointer-events: none;
-  border: 1px solid #c8bcae;
   border: 3px solid #4d2927;
   border-radius: 3px;
   background: #fff9eb;
@@ -6557,7 +6556,7 @@ button:focus-visible {
 .tomato-timer.is-dragging .tomato-panel { visibility: hidden; pointer-events: none; opacity: 0; }
 .tomato-timer.panel-left .tomato-panel { right: auto; left: 0; transform-origin: left bottom; }
 .tomato-timer.panel-left .tomato-panel::after { right: auto; left: 38px; }
-.tomato-timer.panel-below .tomato-panel { top: calc(100% + 14px); bottom: auto; transform-origin: right top; }
+.tomato-timer.panel-below .tomato-panel { top: 100%; bottom: auto; transform-origin: right top; }
 .tomato-timer.panel-below.panel-left .tomato-panel { transform-origin: left top; }
 .tomato-timer.panel-below .tomato-panel::after { top: auto; bottom: 100%; border: 0; border-left: 3px solid #4d2927; border-top: 3px solid #4d2927; transform: translateY(7px) rotate(45deg); }
 .tomato-panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

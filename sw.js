@@ -1,4 +1,4 @@
-const CACHE = 'readquest-shell-v33';
+const CACHE = 'readquest-shell-v34';
 const CORE = [
   './',
   './index.html',
