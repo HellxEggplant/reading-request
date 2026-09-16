@@ -6714,31 +6714,6 @@ button:focus-visible {
 }
 
 /* Reference translation settings */
-.translation-settings-button {
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 12px;
-  border: 1px solid #c9bfb2;
-  background: #fffdf8;
-  color: #494139;
-  font-size: 11px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.translation-settings-button span {
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  background: #4d6756;
-  color: white;
-  font: 800 11px/1 Georgia, "Songti SC", serif;
-}
-
-.translation-settings-button:hover { border-color: #9a352c; color: #8e2924; }
 .translation-settings-dialog {
   width: min(620px, calc(100vw - 30px));
   max-height: calc(100vh - 32px);
@@ -6793,11 +6768,47 @@ button:focus-visible {
 .ai-translation-settings > p b { color: #8e2924; }
 .translation-settings-dialog form > footer { display: flex; justify-content: flex-end; gap: 9px; padding: 15px 23px 19px; border-top: 1px solid #d5ccbf; }
 .translation-settings-dialog footer button { min-height: 40px; padding: 9px 17px; }
-.translation-check-body > footer small button { padding: 0; border: 0; background: none; color: #8e2924; font-size: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
+.translation-source-line { display: inline-flex; align-items: center; gap: 8px; }
+.translation-check-body > footer .translation-settings-gear {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #c9bfb2;
+  background: #fffdf8;
+  color: #5d675f;
+  text-decoration: none;
+}
+.translation-settings-gear b { font-size: 17px; line-height: 1; transition: transform .2s ease; }
+.translation-settings-gear:hover,
+.translation-settings-gear:focus-visible { border-color: #4d6756; background: #eef1e9; color: #354c3d; }
+.translation-settings-gear:hover b { transform: rotate(35deg); }
+.translation-settings-gear i {
+  position: absolute;
+  z-index: 12;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  padding: 6px 9px;
+  border: 1px solid #4d6756;
+  background: #354c3d;
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+  font-style: normal;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition: opacity .15s ease, transform .15s ease;
+}
+.translation-settings-gear i::after { position: absolute; top: 100%; left: 50%; border: 5px solid transparent; border-top-color: #354c3d; content: ''; transform: translateX(-50%); }
+.translation-settings-gear:hover i,
+.translation-settings-gear:focus-visible i { opacity: 1; transform: translate(-50%, 0); }
 
 @media (max-width: 560px) {
-  .translation-settings-button { width: 40px; padding: 8px; font-size: 0; }
-  .translation-settings-button span { width: 22px; }
   .translation-settings-dialog form > header,
   .translation-provider-options,
   .translation-settings-dialog form > footer { padding-inline: 16px; }
