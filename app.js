@@ -187,14 +187,16 @@ function shell(content) {
     <div class="app-shell">
       <main class="main">${content}</main>
     </div>
+    ${translationSettingsDialog()}
   `;
 }
 
 function translationSettingsDialog() {
   if (!ui.translationSettingsOpen) return '';
   const aiSelected = ui.translationProvider === 'openai';
-  return `<aside class="translation-settings-popover" aria-labelledby="translationSettingsTitle">
-    <form data-translation-settings-form>
+  return `<div class="translation-settings-overlay" data-translation-settings-overlay>
+    <section class="translation-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="translationSettingsTitle">
+      <form data-translation-settings-form>
       <header><div><span>REFERENCE TRANSLATION</span><h2 id="translationSettingsTitle">参考译文设置</h2><p>选择生成参考译文时使用的翻译服务。</p></div><button type="button" data-close-translation-settings aria-label="关闭设置">×</button></header>
       <div class="translation-provider-options" role="radiogroup" aria-label="参考译文服务">
         <label class="${aiSelected ? '' : 'selected'}"><input type="radio" name="translationProvider" value="mymemory" ${aiSelected ? '' : 'checked'}><span><b>MyMemory</b><small>默认选项 · 免费在线机器翻译</small></span><em>DEFAULT</em></label>
@@ -209,9 +211,10 @@ function translationSettingsDialog() {
         </select></label>
         <p><b>密钥安全提示</b> 密钥仅保留在当前标签页，关闭后自动清除，不会写入 GitHub 或书库备份。请勿在公共或不可信设备上填写。</p>
       </section>
-      <footer><button class="outline" type="button" data-close-translation-settings>取消</button><button class="primary" type="submit">保存设置</button></footer>
-    </form>
-  </aside>`;
+        <footer><button class="outline" type="button" data-close-translation-settings>取消</button><button class="primary" type="submit">保存设置</button></footer>
+      </form>
+    </section>
+  </div>`;
 }
 
 function libraryPage() {
@@ -1032,7 +1035,7 @@ function sentenceCard(sentence, index, article) {
             <label class="reference-translation-only"><span>参考译文</span><textarea data-reference-translation placeholder="正在等待生成，也可以直接填写…" ${generation?.status === 'loading' ? 'aria-busy="true"' : ''}>${esc(reference)}</textarea></label>
             ${generation?.status === 'loading' ? '<p class="translation-generating"><i></i>在线翻译正在生成，首次使用可能需要几秒钟。</p>' : ''}
             ${generation?.status === 'error' ? `<p class="translation-generation-error">${esc(generation.error)}</p>` : ''}
-            <footer><small class="translation-source-line"><span>${referenceService} · 结果仅供核对，可修改。</span><button class="translation-settings-gear" type="button" data-open-translation-settings aria-label="翻译模型设置" aria-expanded="${ui.translationSettingsOpen}"><b aria-hidden="true">⚙</b><i role="tooltip">翻译模型设置</i></button></small>${translationSettingsDialog()}<div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
+            <footer><small class="translation-source-line"><span>${referenceService} · 结果仅供核对，可修改。</span><button class="translation-settings-gear" type="button" data-open-translation-settings aria-label="翻译模型设置" aria-expanded="${ui.translationSettingsOpen}"><b aria-hidden="true">⚙</b><i role="tooltip">翻译模型设置</i></button></small><div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
           </div>` : ''}
       </section>
       <details><summary>校对识别文字</summary><textarea data-sentence-text>${esc(sentence.text)}</textarea></details>
@@ -1072,8 +1075,13 @@ function bind() {
     ui.translationSettingsOpen = false;
     render();
   }));
+  document.querySelector('[data-translation-settings-overlay]')?.addEventListener('click', event => {
+    if (event.target !== event.currentTarget) return;
+    ui.translationSettingsOpen = false;
+    render();
+  });
   document.querySelectorAll('input[name="translationProvider"]').forEach(input => input.addEventListener('change', event => {
-    const dialog = event.target.closest('.translation-settings-popover');
+    const dialog = event.target.closest('.translation-settings-dialog');
     dialog?.querySelectorAll('.translation-provider-options label').forEach(label => label.classList.toggle('selected', label.contains(event.target)));
     dialog?.querySelector('.ai-translation-settings')?.classList.toggle('visible', event.target.value === 'openai');
   }));
@@ -1278,6 +1286,12 @@ function bind() {
   });
 
   document.onkeydown = event => {
+    if (event.key === 'Escape' && ui.translationSettingsOpen) {
+      event.preventDefault();
+      ui.translationSettingsOpen = false;
+      render();
+      return;
+    }
     if (event.key === 'Escape' && ui.reconstructionPracticeOpen) return;
     if (event.key === 'Escape' && ui.reconstructionDrawerOpen) {
       event.preventDefault();
