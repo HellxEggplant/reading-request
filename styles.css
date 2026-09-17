@@ -6775,6 +6775,29 @@ button:focus-visible {
 .ai-translation-settings label { display: grid; gap: 6px; color: #5d554c; font-size: 11px; font-weight: 800; }
 .ai-translation-settings input,
 .ai-translation-settings select { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #c9bfb2; background: white; color: #29241f; font-size: 13px; }
+.ai-translation-settings .api-key-input { position: relative; }
+.ai-translation-settings .api-key-input input { padding-right: 82px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ai-translation-settings .api-key-input button {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  min-width: 68px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid #c1b7aa;
+  background: #f4eee5;
+  color: #4f4942;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ai-translation-settings .api-key-input button:hover,
+.ai-translation-settings .api-key-input button:focus-visible { border-color: #4d6756; background: #eaf0e8; color: #354d3d; }
+.ai-translation-settings .api-key-input button span { font-size: 13px; }
+.ai-translation-settings .api-key-input button b { font-weight: 800; }
 .ai-translation-settings > p { margin: 2px 0 0; padding: 10px 11px; border-left: 3px solid #ad632e; background: #f6ead9; color: #695f54; font-size: 10px; line-height: 1.65; }
 .ai-translation-settings > p b { color: #8e2924; }
 .translation-settings-dialog form > footer { position: static; display: flex; justify-content: flex-end; gap: 9px; padding: 15px 23px 19px; border-top: 1px solid #d5ccbf; }

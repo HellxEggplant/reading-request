@@ -215,7 +215,7 @@ function translationSettingsDialog() {
         <label class="${aiSelected ? 'selected' : ''}"><input type="radio" name="translationProvider" value="openai" ${aiSelected ? 'checked' : ''}><span><b>OpenAI API</b><small>结合语境生成更自然的参考译文</small></span><em>AI</em></label>
       </div>
       <section class="ai-translation-settings ${aiSelected ? 'visible' : ''}">
-        <label>API 密钥<input id="translationApiKey" type="password" value="${esc(ui.aiApiKey)}" placeholder="sk-proj-…" autocomplete="new-password" spellcheck="false"></label>
+        <label>API 密钥<div class="api-key-input"><input id="translationApiKey" type="password" value="${esc(ui.aiApiKey)}" placeholder="sk-proj-…" autocomplete="new-password" spellcheck="false"><button type="button" data-toggle-api-key aria-label="显示 API 密钥" aria-pressed="false"><span aria-hidden="true">◉</span><b>显示</b></button></div></label>
         <label>翻译模型<select id="translationAiModel">
           <option value="gpt-5.6-luna" ${ui.aiModel === 'gpt-5.6-luna' ? 'selected' : ''}>GPT-5.6 Luna · 快速经济</option>
           <option value="gpt-5.6-terra" ${ui.aiModel === 'gpt-5.6-terra' ? 'selected' : ''}>GPT-5.6 Terra · 质量均衡</option>
@@ -1160,6 +1160,16 @@ function bind() {
     dialog?.querySelector('.ai-translation-settings')?.classList.toggle('visible', event.target.value === 'openai');
   }));
   document.querySelector('[data-translation-settings-form]')?.addEventListener('submit', saveTranslationSettings);
+  document.querySelector('[data-toggle-api-key]')?.addEventListener('click', event => {
+    const button = event.currentTarget;
+    const input = document.querySelector('#translationApiKey');
+    if (!input) return;
+    const revealing = input.type === 'password';
+    input.type = revealing ? 'text' : 'password';
+    button.setAttribute('aria-pressed', revealing ? 'true' : 'false');
+    button.setAttribute('aria-label', revealing ? '隐藏 API 密钥' : '显示 API 密钥');
+    button.querySelector('b').textContent = revealing ? '隐藏' : '显示';
+  });
 
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
     if (ui.immersiveOpen || ui.musicPlaying) stopAmbientMusic();
