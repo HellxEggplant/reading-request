@@ -7024,9 +7024,11 @@ button:focus-visible {
   width: min(1040px, calc(100% - 40px));
   margin: auto;
   display: grid;
-  align-content: center;
+  min-height: 0;
+  align-content: safe center;
   gap: clamp(20px, 4vh, 38px);
   padding: 38px 0 26px;
+  overflow-y: auto;
 }
 .immersive-kicker { margin: 0; color: #8d8174; font: 800 11px ui-monospace, monospace; letter-spacing: .16em; }
 .immersive-sentence {
@@ -7048,19 +7050,22 @@ button:focus-visible {
   cursor: pointer;
 }
 .immersive-sentence button:hover { color: #9a352c; border-bottom-color: #9a352c; }
-.immersive-translation { display: grid; gap: 8px; width: min(760px, 100%); }
+.immersive-translation { display: grid; gap: 9px; width: min(700px, 88%); }
 .immersive-translation span { color: #71685e; font-size: 13px; font-weight: 800; }
 .immersive-translation textarea {
   width: 100%;
-  min-height: 76px;
-  padding: 15px 17px;
+  min-height: clamp(112px, 17vh, 158px);
+  max-height: 220px;
+  padding: 18px 20px;
   resize: vertical;
   border: 1px solid #bbb0a2;
   border-left: 4px solid #4d6756;
+  border-radius: 0 12px 12px 0;
   background: rgba(255,253,248,.75);
   color: #38322c;
-  font: 16px/1.65 Georgia, "Songti SC", serif;
+  font: 17px/1.75 Georgia, "Songti SC", serif;
   outline: none;
+  box-shadow: 0 12px 32px rgba(70,61,50,.06);
 }
 .immersive-translation textarea:focus { border-color: #4d6756; box-shadow: 0 0 0 3px rgba(77,103,86,.12); }
 .immersive-navigation {
@@ -7147,6 +7152,8 @@ button:focus-visible {
   .immersive-music-button > span:nth-child(2), .immersive-music-button > i { display: none; }
   .immersive-reader > main { width: calc(100% - 28px); padding-block: 30px 18px; }
   .immersive-sentence { max-height: 38vh; font-size: clamp(25px, 7vw, 38px); line-height: 1.5; }
+  .immersive-translation { width: 100%; }
+  .immersive-translation textarea { min-height: 118px; max-height: 180px; padding: 15px 16px; font-size: 16px; }
   .immersive-navigation { padding: 12px 14px 16px; }
   .immersive-navigation span { display: none; }
   .immersive-navigation { grid-template-columns: 1fr 1fr; gap: 10px; }
