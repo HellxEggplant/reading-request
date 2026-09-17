@@ -2996,7 +2996,22 @@ function saveTranslationSettings(event) {
   toast(provider === 'deepseek' ? '参考译文已切换为 DeepSeek AI 翻译。' : '参考译文已切换为 MyMemory。');
 }
 
+function buildTranslationContext(article, sentence, radius = 2) {
+  const sentences = Array.isArray(article.sentences) ? article.sentences : [];
+  const targetIndex = sentences.findIndex(item => item.id === sentence.id);
+  if (targetIndex < 0) return { before: [], after: [] };
+  const cleanText = item => String(item?.text || '').trim();
+  return {
+    before: sentences.slice(Math.max(0, targetIndex - radius), targetIndex).map(cleanText).filter(Boolean),
+    after: sentences.slice(targetIndex + 1, targetIndex + radius + 1).map(cleanText).filter(Boolean),
+  };
+}
+
 async function requestDeepSeekTranslation(article, sentence) {
+  const context = buildTranslationContext(article, sentence);
+  const formatContext = items => items.length
+    ? items.map((text, index) => `${index + 1}. ${text}`).join('\n')
+    : '（无）';
   const response = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
     headers: {
@@ -3006,8 +3021,11 @@ async function requestDeepSeekTranslation(article, sentence) {
     body: JSON.stringify({
       model: ui.aiModel || 'deepseek-flash',
       messages: [
-        { role: 'system', content: '你是一名严谨的英语精读教师。把目标英文句子翻译成自然、准确的简体中文；忠实保留原句逻辑、语气和关键信息，长难句要体现从句关系。只输出一条中文译文，不要解释、序号、引号或其他内容。' },
-        { role: 'user', content: `文章标题：${article.title}\n目标句子：${sentence.text.trim()}` },
+        { role: 'system', content: '你是一名严谨的英语精读教师。请结合文章标题、上文和下文理解词义、指代、时态和语气，但只翻译标记为“目标句”的英文。译文应自然、准确，忠实保留目标句的逻辑和关键信息，长难句要体现从句关系。不要翻译相邻句；只输出一条目标句的简体中文译文，不要解释、序号、引号或其他内容。' },
+        {
+          role: 'user',
+          content: `文章标题：${article.title}\n\n上文（仅供理解语境）：\n${formatContext(context.before)}\n\n【目标句】\n${sentence.text.trim()}\n\n下文（仅供理解语境）：\n${formatContext(context.after)}\n\n任务：只翻译【目标句】，不要翻译上文或下文。`,
+        },
       ],
       thinking: { type: 'disabled' },
       max_tokens: 300,
@@ -3039,14 +3057,14 @@ async function generateReferenceTranslation(sentenceId, regenerate = false) {
     render();
     return;
   }
-  if (ui.translationProvider === 'deepseek' && localStorage.getItem('readquest-deepseek-consent') !== '1') {
-    const allowed = window.confirm('生成参考译文需要把当前英文句子和文章标题发送到 DeepSeek API。不会发送 PDF、中文翻译、笔记、生词或整篇文章。是否允许？');
+  if (ui.translationProvider === 'deepseek' && localStorage.getItem('readquest-deepseek-context-consent-v1') !== '1') {
+    const allowed = window.confirm('为了结合上下文生成参考译文，需要把文章标题、当前目标句及其前后各最多两句发送到 DeepSeek API。不会发送 PDF、中文翻译、笔记、生词或整篇文章。是否允许？');
     if (!allowed) {
       ui.translationGeneration.set(sentenceId, { status: 'error', error: '未启用 DeepSeek 翻译。你仍可手动填写参考译文。' });
       render();
       return;
     }
-    localStorage.setItem('readquest-deepseek-consent', '1');
+    localStorage.setItem('readquest-deepseek-context-consent-v1', '1');
   }
   if (ui.translationProvider === 'mymemory' && localStorage.getItem('readquest-mymemory-consent') !== '1') {
     const allowed = window.confirm('生成参考译文需要把当前英文句子发送到 MyMemory 在线翻译服务。只发送这一句英文，不发送 PDF、笔记或个人信息。是否允许？');
@@ -3072,7 +3090,7 @@ async function generateReferenceTranslation(sentenceId, regenerate = false) {
       if (!response.ok || data.responseStatus !== 200 || !translatedText) throw new Error(data.responseDetails || '没有生成可用的参考译文。');
     }
     sentence.referenceTranslation = translatedText;
-    sentence.referenceTranslationSource = ui.translationProvider === 'deepseek' ? `DeepSeek · ${ui.aiModel}` : 'MyMemory 在线翻译';
+    sentence.referenceTranslationSource = ui.translationProvider === 'deepseek' ? `DeepSeek · ${ui.aiModel} · 上下文翻译` : 'MyMemory 在线翻译';
     sentence.referenceTranslationGeneratedAt = new Date().toISOString();
     article.updatedAt = new Date().toISOString();
     await records.put('articles', article);
