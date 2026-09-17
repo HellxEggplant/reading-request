@@ -68,6 +68,15 @@ const ui = {
   pomodoroRunning: false,
   pomodoroEndsAt: null,
   pomodoroPanelOpen: false,
+  pomodoroAutoStart: readBrowserSetting('local', 'reading-request-pomodoro-auto', '1') !== '0',
+  heroSlide: 0,
+  immersiveOpen: false,
+  musicSettingsOpen: false,
+  musicPlaying: false,
+  musicDefaultOn: readBrowserSetting('local', 'reading-request-music-default', '1') !== '0',
+  musicSource: readBrowserSetting('local', 'reading-request-music-source', 'builtin'),
+  musicUrl: readBrowserSetting('local', 'reading-request-music-url'),
+  musicVolume: Number(readBrowserSetting('local', 'reading-request-music-volume', '.32')) || .32,
   translationSettingsOpen: false,
   translationProvider: readBrowserSetting('local', 'readquest-translation-provider', 'mymemory'),
   aiApiKey: readBrowserSetting('session', 'readquest-openai-api-key'),
@@ -77,6 +86,9 @@ const ui = {
 let dbPromise;
 let difficultHintTimer;
 let pomodoroTimer;
+let heroCarouselTimer;
+let ambientAudio;
+let ambientNodes;
 let tomatoWasDragged = false;
 
 function openDatabase() {
@@ -218,6 +230,11 @@ function translationSettingsDialog() {
 }
 
 function libraryPage() {
+  const heroSlides = [
+    { image: 'assets/editorial-reading-desk.png', position: 'center 60%', crop: '', eyebrow: 'READ DEEPLY', copy: '每一次精读，都是一次真正的语言实践。' },
+    { image: 'assets/modern-chinese-reading-thumbnails.png', position: 'left center', crop: 'crop-left', eyebrow: '静心入文', copy: '一桌、一卷、一段不被打断的阅读时间。' },
+    { image: 'assets/modern-chinese-reading-thumbnails.png', position: 'right center', crop: 'crop-right', eyebrow: '日日有得', copy: '把读过的句子，慢慢变成自己的语言。' },
+  ];
   const recent = ui.articles.slice(0, 3);
   const query = ui.libraryQuery.trim().toLocaleLowerCase();
   const visibleDocuments = ui.documents
@@ -242,9 +259,18 @@ function libraryPage() {
           <span><b>${ui.articles.filter(article => article.completed).length}</b><small>篇完成</small></span>
         </div>
       </div>
-      <figure class="library-heading-visual">
-        <img src="assets/editorial-reading-desk.png" alt="阳光下放着英文杂志和笔记本的阅读桌">
-        <figcaption><b>READ DEEPLY</b><span>每一次精读，都是一次真正的语言实践。</span></figcaption>
+      <figure class="library-heading-visual" data-hero-carousel aria-roledescription="轮播图">
+        <div class="hero-slides">
+          ${heroSlides.map((slide, index) => `<article class="hero-slide ${slide.crop} ${index === ui.heroSlide ? 'active' : ''}" data-hero-slide="${index}" aria-hidden="${index === ui.heroSlide ? 'false' : 'true'}">
+            <img src="${slide.image}" style="object-position:${slide.position}" alt="${index === 0 ? '阳光下放着英文杂志和笔记本的阅读桌' : '现代中式阅读空间'}">
+            <figcaption><b>${slide.eyebrow}</b><span>${slide.copy}</span></figcaption>
+          </article>`).join('')}
+        </div>
+        <div class="hero-carousel-controls">
+          <button type="button" data-hero-step="-1" aria-label="上一张图片">←</button>
+          <div>${heroSlides.map((_, index) => `<button type="button" class="${index === ui.heroSlide ? 'active' : ''}" data-hero-dot="${index}" aria-label="查看第 ${index + 1} 张图片" aria-current="${index === ui.heroSlide ? 'true' : 'false'}"></button>`).join('')}</div>
+          <button type="button" data-hero-step="1" aria-label="下一张图片">→</button>
+        </div>
       </figure>
     </section>
 
@@ -794,7 +820,7 @@ function readerPage() {
   return shell(`
     <section class="reader-heading">
       <div><button class="back-button" data-view="articles">← 返回精读文章</button><p class="eyebrow">${esc(article.level)} · ${esc(article.documentName)}</p><h1>${esc(article.title)}</h1></div>
-      <div class="reader-actions"><div class="reader-progress" aria-label="精读进度 ${progress}%"><div><span>精读进度</span><b>${progress}%</b></div><i><em style="width:${progress}%"></em></i></div><button class="outline reader-save-button" data-save-reader>保存</button><button class="primary reader-complete-button" data-complete-reader>${article.completed ? '已完成 ✓' : '完成精读'}</button></div>
+      <div class="reader-actions"><div class="reader-progress" aria-label="精读进度 ${progress}%"><div><span>精读进度</span><b>${progress}%</b></div><i><em style="width:${progress}%"></em></i></div><button class="outline immersive-enter-button" data-open-immersive>沉浸模式</button><button class="outline reader-save-button" data-save-reader>保存</button><button class="primary reader-complete-button" data-complete-reader>${article.completed ? '已完成 ✓' : '完成精读'}</button></div>
     </section>
     <div class="reader-layout" style="--reader-split:${ui.readerSplit}%">
       <section class="source-pane">
@@ -827,9 +853,54 @@ function readerPage() {
     </div>
     ${pomodoroMarkup()}
     ${reconstructionSidebarMarkup(article)}
+    ${ui.immersiveOpen ? immersiveReaderMarkup(article, activeSentence, progress) : ''}
     ${ui.sourceDialog ? sourceDialogMarkup(article) : ''}
     ${ui.wordDialog ? wordDialogMarkup(article) : ''}
   `);
+}
+
+function immersiveReaderMarkup(article, sentence, progress) {
+  if (!sentence) return '';
+  const tokens = tokenize(sentence.text).map(token => /^[A-Za-z]+(?:['’\-][A-Za-z]+)*$/.test(token)
+    ? `<button type="button" data-word="${esc(token)}">${esc(token)}</button>`
+    : esc(token)).join('');
+  return `<section class="immersive-reader" role="dialog" aria-modal="true" aria-label="沉浸精读模式">
+    <header>
+      <div><span>IMMERSIVE READING</span><b>${esc(article.title)}</b></div>
+      <div class="immersive-header-actions">
+        <button type="button" data-music-settings aria-expanded="${ui.musicSettingsOpen}">♫ 轻音乐</button>
+        <button type="button" data-close-immersive aria-label="退出沉浸模式">退出 ×</button>
+      </div>
+    </header>
+    <div class="immersive-progress"><i style="width:${progress}%"></i><span>${ui.readerSentenceIndex + 1} / ${article.sentences.length}</span></div>
+    <main>
+      <p class="immersive-kicker">第 ${String(ui.readerSentenceIndex + 1).padStart(2, '0')} 句</p>
+      <article class="immersive-sentence ${sentence.difficult ? 'difficult' : ''}">${tokens}</article>
+      <label class="immersive-translation"><span>我的中文理解</span><textarea data-immersive-translation placeholder="写下你对这句话的理解…">${esc(sentence.translation || '')}</textarea></label>
+    </main>
+    <nav class="immersive-navigation" aria-label="沉浸模式逐句切换">
+      <button type="button" data-reader-sentence="-1" ${ui.readerSentenceIndex <= 0 ? 'disabled' : ''}>← 上一句</button>
+      <span>${sentence.difficult ? '◆ 长难句' : '逐句精读'}</span>
+      <button type="button" data-reader-sentence="1" ${ui.readerSentenceIndex >= article.sentences.length - 1 ? 'disabled' : ''}>下一句 →</button>
+    </nav>
+    ${musicSettingsMarkup()}
+  </section>`;
+}
+
+function musicSettingsMarkup() {
+  if (!ui.musicSettingsOpen) return '';
+  return `<aside class="immersive-music-panel" aria-label="轻音乐设置">
+    <header><div><span>READING SOUNDSPACE</span><b>轻音乐空间</b></div><button type="button" data-close-music-settings aria-label="关闭音乐设置">×</button></header>
+    <p>内置“松风”氛围音无需网络。也可以填写可直接播放的 MP3、M4A、OGG、WAV 或 MP4 地址。</p>
+    <div class="music-source-options">
+      <label class="${ui.musicSource === 'builtin' ? 'selected' : ''}"><input type="radio" name="musicSource" value="builtin" ${ui.musicSource === 'builtin' ? 'checked' : ''}><span><b>松风 · 内置</b><small>柔和风声与低频氛围</small></span></label>
+      <label class="${ui.musicSource === 'custom' ? 'selected' : ''}"><input type="radio" name="musicSource" value="custom" ${ui.musicSource === 'custom' ? 'checked' : ''}><span><b>自定义地址</b><small>音频或带声音的视频直链</small></span></label>
+    </div>
+    <label class="music-url-field ${ui.musicSource === 'custom' ? 'visible' : ''}">媒体网址<input type="url" data-music-url value="${esc(ui.musicUrl)}" placeholder="https://example.com/music.mp3"><small>视频网站的普通网页地址通常不能直接播放；请使用媒体文件直链。</small></label>
+    <label class="music-volume">音量 <input type="range" min="0" max="1" step="0.01" value="${ui.musicVolume}" data-music-volume><b>${Math.round(ui.musicVolume * 100)}%</b></label>
+    <label class="music-default-toggle"><input type="checkbox" data-music-default ${ui.musicDefaultOn ? 'checked' : ''}> 每次进入沉浸模式时默认播放</label>
+    <footer><button type="button" class="outline" data-music-play>${ui.musicPlaying ? '暂停音乐' : '试听播放'}</button><button type="button" class="primary" data-save-music-settings>保存设置</button></footer>
+  </aside>`;
 }
 
 function pomodoroMarkup() {
@@ -864,8 +935,10 @@ function pomodoroMarkup() {
     <section class="tomato-panel" aria-label="番茄时钟控制">
       <header><div><span>POMODORO</span><b>${label}时间</b></div><em>${ui.pomodoroMode === 'focus' ? '25 MIN' : '5 MIN'}</em></header>
       <p>用 25 分钟专注精读，再休息 5 分钟。短时段更容易保持注意力。</p>
+      <div class="tomato-mode-switch" role="group" aria-label="选择计时阶段"><button type="button" class="${ui.pomodoroMode === 'focus' ? 'active' : ''}" data-pomodoro-mode="focus">专注 25:00</button><button type="button" class="${ui.pomodoroMode === 'break' ? 'active' : ''}" data-pomodoro-mode="break">休息 05:00</button></div>
       <div class="tomato-panel-progress" role="progressbar" aria-label="${label}计时进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress)}"><i data-pomodoro-progress style="width:${progress}%"></i></div>
       <div class="tomato-actions"><button class="primary" type="button" data-pomodoro-toggle>${ui.pomodoroRunning ? '暂停计时' : '开始计时'}</button><button type="button" data-pomodoro-reset>重置</button></div>
+      <label class="tomato-auto-start"><input type="checkbox" data-pomodoro-auto ${ui.pomodoroAutoStart ? 'checked' : ''}> 本阶段结束后自动开始下一阶段</label>
     </section>
   </aside>`;
 }
@@ -1067,6 +1140,7 @@ function render() {
 }
 
 function bind() {
+  bindHeroCarousel();
   document.querySelectorAll('[data-open-translation-settings]').forEach(button => button.addEventListener('click', () => {
     ui.translationSettingsOpen = !ui.translationSettingsOpen;
     render();
@@ -1088,12 +1162,15 @@ function bind() {
   document.querySelector('[data-translation-settings-form]')?.addEventListener('submit', saveTranslationSettings);
 
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
+    if (ui.immersiveOpen || ui.musicPlaying) stopAmbientMusic();
     ui.view = button.dataset.view;
     ui.selectedArticleId = null;
     ui.sourceDialog = false;
     ui.sourcePreviewArticleId = null;
     ui.articleEditId = null;
     ui.wordDialog = null;
+    ui.immersiveOpen = false;
+    ui.musicSettingsOpen = false;
     render();
   }));
 
@@ -1286,6 +1363,11 @@ function bind() {
   });
 
   document.onkeydown = event => {
+    if (event.key === 'Escape' && ui.immersiveOpen) {
+      event.preventDefault();
+      closeImmersiveReader();
+      return;
+    }
     if (event.key === 'Escape' && ui.translationSettingsOpen) {
       event.preventDefault();
       ui.translationSettingsOpen = false;
@@ -1455,6 +1537,35 @@ function bind() {
   }
   document.querySelector('[data-save-reader]')?.addEventListener('click', () => saveReader(false));
   document.querySelector('[data-complete-reader]')?.addEventListener('click', () => saveReader(true));
+  document.querySelector('[data-open-immersive]')?.addEventListener('click', openImmersiveReader);
+  document.querySelector('[data-close-immersive]')?.addEventListener('click', closeImmersiveReader);
+  document.querySelector('[data-music-settings]')?.addEventListener('click', () => {
+    if (ui.musicSettingsOpen) closeMusicSettings();
+    else {
+      ui.musicSettingsOpen = true;
+      render();
+    }
+  });
+  document.querySelector('[data-close-music-settings]')?.addEventListener('click', closeMusicSettings);
+  document.querySelectorAll('input[name="musicSource"]').forEach(input => input.addEventListener('change', event => {
+    document.querySelectorAll('.music-source-options label').forEach(label => label.classList.toggle('selected', label.contains(event.target)));
+    document.querySelector('.music-url-field')?.classList.toggle('visible', event.target.value === 'custom');
+  }));
+  document.querySelector('[data-music-volume]')?.addEventListener('input', event => {
+    ui.musicVolume = Number(event.target.value);
+    event.target.nextElementSibling.textContent = `${Math.round(ui.musicVolume * 100)}%`;
+    setAmbientVolume(ui.musicVolume);
+  });
+  document.querySelector('[data-music-play]')?.addEventListener('click', toggleAmbientMusic);
+  document.querySelector('[data-save-music-settings]')?.addEventListener('click', saveMusicSettings);
+  document.querySelector('[data-immersive-translation]')?.addEventListener('input', event => {
+    const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+    const sentence = article?.sentences[ui.readerSentenceIndex];
+    if (!sentence) return;
+    sentence.translation = event.target.value;
+    const regularInput = document.querySelector('.sentence-card [data-translation]');
+    if (regularInput) regularInput.value = event.target.value;
+  });
   document.querySelector('[data-pomodoro-panel-toggle]')?.addEventListener('click', () => {
     if (tomatoWasDragged) {
       tomatoWasDragged = false;
@@ -1473,9 +1584,205 @@ function bind() {
   });
   document.querySelector('[data-pomodoro-toggle]')?.addEventListener('click', togglePomodoro);
   document.querySelector('[data-pomodoro-reset]')?.addEventListener('click', resetPomodoro);
+  document.querySelectorAll('[data-pomodoro-mode]').forEach(button => button.addEventListener('click', () => switchPomodoroMode(button.dataset.pomodoroMode)));
+  document.querySelector('[data-pomodoro-auto]')?.addEventListener('change', event => {
+    ui.pomodoroAutoStart = event.target.checked;
+    try { localStorage.setItem('reading-request-pomodoro-auto', ui.pomodoroAutoStart ? '1' : '0'); } catch {}
+  });
   document.querySelector('[data-add-sentence]')?.addEventListener('click', addSentence);
   document.querySelectorAll('[data-reader-sentence]').forEach(button => button.addEventListener('click', () => changeReaderSentence(Number(button.dataset.readerSentence))));
   if (ui.view === 'reader') queueMissingDifficultTranslations();
+}
+
+function bindHeroCarousel() {
+  clearInterval(heroCarouselTimer);
+  const carousel = document.querySelector('[data-hero-carousel]');
+  if (!carousel) return;
+  const slides = [...carousel.querySelectorAll('[data-hero-slide]')];
+  const dots = [...carousel.querySelectorAll('[data-hero-dot]')];
+  const show = index => {
+    ui.heroSlide = (index + slides.length) % slides.length;
+    slides.forEach((slide, slideIndex) => {
+      const active = slideIndex === ui.heroSlide;
+      slide.classList.toggle('active', active);
+      slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+    });
+    dots.forEach((dot, dotIndex) => {
+      const active = dotIndex === ui.heroSlide;
+      dot.classList.toggle('active', active);
+      dot.setAttribute('aria-current', active ? 'true' : 'false');
+    });
+  };
+  const start = () => {
+    clearInterval(heroCarouselTimer);
+    if (slides.length > 1) heroCarouselTimer = setInterval(() => show(ui.heroSlide + 1), 5600);
+  };
+  carousel.querySelectorAll('[data-hero-step]').forEach(button => button.addEventListener('click', () => {
+    show(ui.heroSlide + Number(button.dataset.heroStep));
+    start();
+  }));
+  dots.forEach(dot => dot.addEventListener('click', () => {
+    show(Number(dot.dataset.heroDot));
+    start();
+  }));
+  carousel.addEventListener('mouseenter', () => clearInterval(heroCarouselTimer));
+  carousel.addEventListener('mouseleave', start);
+  start();
+}
+
+async function openImmersiveReader() {
+  const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+  if (article) collectReader(article);
+  ui.immersiveOpen = true;
+  ui.musicSettingsOpen = false;
+  render();
+  if (ui.musicDefaultOn) startAmbientMusic();
+  if (window.innerWidth > 760) try { await document.documentElement.requestFullscreen?.(); } catch {}
+}
+
+async function closeImmersiveReader() {
+  const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+  if (article) {
+    const input = document.querySelector('[data-immersive-translation]');
+    if (input && article.sentences[ui.readerSentenceIndex]) article.sentences[ui.readerSentenceIndex].translation = input.value;
+    article.updatedAt = new Date().toISOString();
+    await records.put('articles', article);
+  }
+  ui.immersiveOpen = false;
+  ui.musicSettingsOpen = false;
+  stopAmbientMusic();
+  if (document.fullscreenElement) try { await document.exitFullscreen(); } catch {}
+  render();
+}
+
+function stopAmbientMusic() {
+  if (ambientAudio) {
+    ambientAudio.pause();
+    ambientAudio.src = '';
+    ambientAudio = null;
+  }
+  if (ambientNodes) {
+    ambientNodes.sources.forEach(source => { try { source.stop(); } catch {} });
+    ambientNodes.context.close().catch(() => {});
+    ambientNodes = null;
+  }
+  ui.musicPlaying = false;
+}
+
+function setAmbientVolume(value) {
+  if (ambientAudio) ambientAudio.volume = value;
+  if (ambientNodes?.gain) ambientNodes.gain.gain.setTargetAtTime(value * .18, ambientNodes.context.currentTime, .08);
+}
+
+async function startAmbientMusic() {
+  stopAmbientMusic();
+  if (ui.musicSource === 'custom') {
+    let url;
+    try {
+      url = new URL(ui.musicUrl);
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('protocol');
+    } catch {
+      toast('请填写可直接播放的音频或视频媒体地址。', true);
+      return;
+    }
+    ambientAudio = new Audio(url.href);
+    ambientAudio.loop = true;
+    ambientAudio.volume = ui.musicVolume;
+    ambientAudio.addEventListener('error', () => {
+      stopAmbientMusic();
+      toast('这个地址无法直接播放。请换成 MP3、M4A、OGG、WAV 或 MP4 文件直链。', true);
+      render();
+    }, { once: true });
+    try {
+      await ambientAudio.play();
+      ui.musicPlaying = true;
+    } catch {
+      stopAmbientMusic();
+      toast('浏览器未能播放这个媒体地址，请检查链接或点击后重试。', true);
+    }
+    return;
+  }
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    const context = new AudioContextClass();
+    const gain = context.createGain();
+    gain.gain.value = ui.musicVolume * .18;
+    gain.connect(context.destination);
+
+    const buffer = context.createBuffer(1, context.sampleRate * 3, context.sampleRate);
+    const data = buffer.getChannelData(0);
+    let last = 0;
+    for (let index = 0; index < data.length; index += 1) {
+      last = (last + .018 * (Math.random() * 2 - 1)) / 1.018;
+      data[index] = last * 2.2;
+    }
+    const wind = context.createBufferSource();
+    wind.buffer = buffer;
+    wind.loop = true;
+    const filter = context.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 720;
+    wind.connect(filter).connect(gain);
+
+    const toneGain = context.createGain();
+    toneGain.gain.value = .035;
+    toneGain.connect(gain);
+    const tones = [174.61, 261.63].map(frequency => {
+      const oscillator = context.createOscillator();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      oscillator.connect(toneGain);
+      oscillator.start();
+      return oscillator;
+    });
+    wind.start();
+    ambientNodes = { context, gain, sources: [wind, ...tones] };
+    ui.musicPlaying = true;
+  } catch {
+    stopAmbientMusic();
+    toast('当前浏览器暂时无法播放内置氛围音。', true);
+  }
+}
+
+async function toggleAmbientMusic() {
+  const sourceInput = document.querySelector('input[name="musicSource"]:checked');
+  const urlInput = document.querySelector('[data-music-url]');
+  if (sourceInput) ui.musicSource = sourceInput.value;
+  if (urlInput) ui.musicUrl = urlInput.value.trim();
+  if (ui.musicPlaying) stopAmbientMusic();
+  else await startAmbientMusic();
+  render();
+}
+
+function saveMusicSettings() {
+  const sourceInput = document.querySelector('input[name="musicSource"]:checked');
+  const urlInput = document.querySelector('[data-music-url]');
+  const defaultInput = document.querySelector('[data-music-default]');
+  const volumeInput = document.querySelector('[data-music-volume]');
+  if (sourceInput) ui.musicSource = sourceInput.value;
+  if (urlInput) ui.musicUrl = urlInput.value.trim();
+  if (defaultInput) ui.musicDefaultOn = defaultInput.checked;
+  if (volumeInput) ui.musicVolume = Number(volumeInput.value);
+  try {
+    localStorage.setItem('reading-request-music-source', ui.musicSource);
+    localStorage.setItem('reading-request-music-url', ui.musicUrl);
+    localStorage.setItem('reading-request-music-default', ui.musicDefaultOn ? '1' : '0');
+    localStorage.setItem('reading-request-music-volume', String(ui.musicVolume));
+  } catch {}
+  ui.musicSettingsOpen = false;
+  setAmbientVolume(ui.musicVolume);
+  render();
+  toast('轻音乐设置已保存。');
+}
+
+function closeMusicSettings() {
+  ui.musicSource = readBrowserSetting('local', 'reading-request-music-source', 'builtin');
+  ui.musicUrl = readBrowserSetting('local', 'reading-request-music-url');
+  ui.musicDefaultOn = readBrowserSetting('local', 'reading-request-music-default', '1') !== '0';
+  ui.musicVolume = Number(readBrowserSetting('local', 'reading-request-music-volume', '.32')) || .32;
+  ui.musicSettingsOpen = false;
+  setAmbientVolume(ui.musicVolume);
+  render();
 }
 
 function tomatoPositionBounds(timer) {
@@ -1833,8 +2140,15 @@ function tickPomodoro() {
   ui.pomodoroEndsAt = null;
   ui.pomodoroMode = ui.pomodoroMode === 'focus' ? 'break' : 'focus';
   ui.pomodoroRemaining = ui.pomodoroMode === 'focus' ? 25 * 60 : 5 * 60;
+  if (ui.pomodoroAutoStart) {
+    ui.pomodoroRunning = true;
+    ui.pomodoroEndsAt = Date.now() + ui.pomodoroRemaining * 1000;
+  }
   render();
-  toast(ui.pomodoroMode === 'break' ? '25 分钟专注完成，现在休息 5 分钟吧。' : '休息结束，可以开始下一轮精读。');
+  if (ui.pomodoroRunning) pomodoroTimer = setInterval(tickPomodoro, 250);
+  toast(ui.pomodoroMode === 'break'
+    ? `25 分钟专注完成，${ui.pomodoroAutoStart ? '5 分钟休息倒计时已开始。' : '现在休息 5 分钟吧。'}`
+    : `休息结束，${ui.pomodoroAutoStart ? '下一轮专注已开始。' : '可以开始下一轮精读。'}`);
 }
 
 function togglePomodoro() {
@@ -1859,6 +2173,17 @@ function resetPomodoro() {
   ui.pomodoroRunning = false;
   ui.pomodoroEndsAt = null;
   ui.pomodoroRemaining = ui.pomodoroMode === 'focus' ? 25 * 60 : 5 * 60;
+  render();
+  document.title = '精读任务站 · 阅读书库';
+}
+
+function switchPomodoroMode(mode) {
+  if (!['focus', 'break'].includes(mode) || mode === ui.pomodoroMode) return;
+  clearInterval(pomodoroTimer);
+  ui.pomodoroMode = mode;
+  ui.pomodoroRemaining = mode === 'focus' ? 25 * 60 : 5 * 60;
+  ui.pomodoroRunning = false;
+  ui.pomodoroEndsAt = null;
   render();
   document.title = '精读任务站 · 阅读书库';
 }
