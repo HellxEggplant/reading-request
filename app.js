@@ -78,9 +78,9 @@ const ui = {
   musicUrl: readBrowserSetting('local', 'reading-request-music-url'),
   musicVolume: Number(readBrowserSetting('local', 'reading-request-music-volume', '.32')) || .32,
   translationSettingsOpen: false,
-  translationProvider: readBrowserSetting('local', 'readquest-translation-provider', 'mymemory'),
-  aiApiKey: readBrowserSetting('session', 'readquest-openai-api-key'),
-  aiModel: readBrowserSetting('local', 'readquest-openai-model', 'gpt-5.6-luna'),
+  translationProvider: readBrowserSetting('local', 'readquest-translation-provider', 'mymemory') === 'deepseek' ? 'deepseek' : 'mymemory',
+  aiApiKey: readBrowserSetting('session', 'readquest-deepseek-api-key'),
+  aiModel: readBrowserSetting('local', 'readquest-deepseek-model', 'deepseek-flash'),
 };
 
 let dbPromise;
@@ -205,21 +205,20 @@ function shell(content) {
 
 function translationSettingsDialog() {
   if (!ui.translationSettingsOpen) return '';
-  const aiSelected = ui.translationProvider === 'openai';
+  const aiSelected = ui.translationProvider === 'deepseek';
   return `<div class="translation-settings-overlay" data-translation-settings-overlay>
     <section class="translation-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="translationSettingsTitle">
       <form data-translation-settings-form>
       <header><div><span>REFERENCE TRANSLATION</span><h2 id="translationSettingsTitle">参考译文设置</h2><p>选择生成参考译文时使用的翻译服务。</p></div><button type="button" data-close-translation-settings aria-label="关闭设置">×</button></header>
       <div class="translation-provider-options" role="radiogroup" aria-label="参考译文服务">
         <label class="${aiSelected ? '' : 'selected'}"><input type="radio" name="translationProvider" value="mymemory" ${aiSelected ? '' : 'checked'}><span><b>MyMemory</b><small>默认选项 · 免费在线机器翻译</small></span><em>DEFAULT</em></label>
-        <label class="${aiSelected ? 'selected' : ''}"><input type="radio" name="translationProvider" value="openai" ${aiSelected ? 'checked' : ''}><span><b>OpenAI API</b><small>结合语境生成更自然的参考译文</small></span><em>AI</em></label>
+        <label class="${aiSelected ? 'selected' : ''}"><input type="radio" name="translationProvider" value="deepseek" ${aiSelected ? 'checked' : ''}><span><b>DeepSeek API</b><small>结合语境生成更自然的参考译文</small></span><em>AI</em></label>
       </div>
       <section class="ai-translation-settings ${aiSelected ? 'visible' : ''}">
-        <label>API 密钥<div class="api-key-input"><input id="translationApiKey" type="password" value="${esc(ui.aiApiKey)}" placeholder="sk-proj-…" autocomplete="new-password" spellcheck="false"><button type="button" data-toggle-api-key aria-label="显示 API 密钥" aria-pressed="false"><span aria-hidden="true">◉</span><b>显示</b></button></div></label>
+        <label>DeepSeek API 密钥<div class="api-key-input"><input id="translationApiKey" type="password" value="${esc(ui.aiApiKey)}" placeholder="sk-…" autocomplete="new-password" spellcheck="false"><button type="button" data-toggle-api-key aria-label="显示 API 密钥" aria-pressed="false"><span aria-hidden="true">◉</span><b>显示</b></button></div></label>
         <label>翻译模型<select id="translationAiModel">
-          <option value="gpt-5.6-luna" ${ui.aiModel === 'gpt-5.6-luna' ? 'selected' : ''}>GPT-5.6 Luna · 快速经济</option>
-          <option value="gpt-5.6-terra" ${ui.aiModel === 'gpt-5.6-terra' ? 'selected' : ''}>GPT-5.6 Terra · 质量均衡</option>
-          <option value="gpt-5.6-sol" ${ui.aiModel === 'gpt-5.6-sol' ? 'selected' : ''}>GPT-5.6 Sol · 更高质量</option>
+          <option value="deepseek-flash" ${ui.aiModel === 'deepseek-flash' ? 'selected' : ''}>DeepSeek Flash · 快速经济</option>
+          <option value="deepseek-v4-pro" ${ui.aiModel === 'deepseek-v4-pro' ? 'selected' : ''}>DeepSeek V4 Pro · 质量优先</option>
         </select></label>
         <p><b>密钥安全提示</b> 密钥仅保留在当前标签页，关闭后自动清除，不会写入 GitHub 或书库备份。请勿在公共或不可信设备上填写。</p>
       </section>
@@ -1090,7 +1089,7 @@ function sentenceCard(sentence, index, article) {
   const checkOpen = ui.translationCheckIds.has(sentence.id);
   const reference = sentence.referenceTranslation || '';
   const generation = ui.translationGeneration.get(sentence.id);
-  const referenceService = ui.translationProvider === 'openai' ? 'OpenAI AI 翻译' : 'MyMemory 在线翻译';
+  const referenceService = ui.translationProvider === 'deepseek' ? 'DeepSeek AI 翻译' : 'MyMemory 在线翻译';
   return `
     <article class="sentence-card ${difficult}" data-sentence-id="${sentence.id}">
       <header><span>${String(index + 1).padStart(2, '0')}</span><button data-toggle-difficult="${sentence.id}">${sentence.difficult ? '◆ 已标记长难句' : '◇ 标记长难句'}</button></header>
@@ -1157,7 +1156,7 @@ function bind() {
   document.querySelectorAll('input[name="translationProvider"]').forEach(input => input.addEventListener('change', event => {
     const dialog = event.target.closest('.translation-settings-dialog');
     dialog?.querySelectorAll('.translation-provider-options label').forEach(label => label.classList.toggle('selected', label.contains(event.target)));
-    dialog?.querySelector('.ai-translation-settings')?.classList.toggle('visible', event.target.value === 'openai');
+    dialog?.querySelector('.ai-translation-settings')?.classList.toggle('visible', event.target.value === 'deepseek');
   }));
   document.querySelector('[data-translation-settings-form]')?.addEventListener('submit', saveTranslationSettings);
   document.querySelector('[data-toggle-api-key]')?.addEventListener('click', event => {
@@ -2977,9 +2976,9 @@ function saveTranslationSettings(event) {
   const form = event.currentTarget;
   const provider = form.querySelector('input[name="translationProvider"]:checked')?.value || 'mymemory';
   const apiKey = form.querySelector('#translationApiKey')?.value.trim() || '';
-  const model = form.querySelector('#translationAiModel')?.value || 'gpt-5.6-luna';
-  if (provider === 'openai' && !apiKey) {
-    toast('选择 OpenAI API 时需要填写 API 密钥。', true);
+  const model = form.querySelector('#translationAiModel')?.value || 'deepseek-flash';
+  if (provider === 'deepseek' && !apiKey) {
+    toast('选择 DeepSeek API 时需要填写 API 密钥。', true);
     form.querySelector('#translationApiKey')?.focus();
     return;
   }
@@ -2989,37 +2988,42 @@ function saveTranslationSettings(event) {
   ui.translationSettingsOpen = false;
   try {
     localStorage.setItem('readquest-translation-provider', provider);
-    localStorage.setItem('readquest-openai-model', model);
-    if (apiKey) sessionStorage.setItem('readquest-openai-api-key', apiKey);
-    else sessionStorage.removeItem('readquest-openai-api-key');
+    localStorage.setItem('readquest-deepseek-model', model);
+    if (apiKey) sessionStorage.setItem('readquest-deepseek-api-key', apiKey);
+    else sessionStorage.removeItem('readquest-deepseek-api-key');
   } catch {}
   render();
-  toast(provider === 'openai' ? '参考译文已切换为 OpenAI AI 翻译。' : '参考译文已切换为 MyMemory。');
+  toast(provider === 'deepseek' ? '参考译文已切换为 DeepSeek AI 翻译。' : '参考译文已切换为 MyMemory。');
 }
 
-async function requestOpenAiTranslation(article, sentence) {
-  const response = await fetch('https://api.openai.com/v1/responses', {
+async function requestDeepSeekTranslation(article, sentence) {
+  const response = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${ui.aiApiKey}`,
     },
     body: JSON.stringify({
-      model: ui.aiModel || 'gpt-5.6-luna',
-      store: false,
-      max_output_tokens: 300,
-      instructions: '你是一名严谨的英语精读教师。把目标英文句子翻译成自然、准确的简体中文；忠实保留原句逻辑、语气和关键信息，长难句要体现从句关系。只输出一条中文译文，不要解释、序号、引号或其他内容。',
-      input: `文章标题：${article.title}\n目标句子：${sentence.text.trim()}`,
+      model: ui.aiModel || 'deepseek-flash',
+      messages: [
+        { role: 'system', content: '你是一名严谨的英语精读教师。把目标英文句子翻译成自然、准确的简体中文；忠实保留原句逻辑、语气和关键信息，长难句要体现从句关系。只输出一条中文译文，不要解释、序号、引号或其他内容。' },
+        { role: 'user', content: `文章标题：${article.title}\n目标句子：${sentence.text.trim()}` },
+      ],
+      thinking: { type: 'disabled' },
+      max_tokens: 300,
+      temperature: 0.2,
+      stream: false,
     }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if (response.status === 401) throw new Error('OpenAI API 密钥无效，请在“译文设置”中检查。');
-    if (response.status === 429) throw new Error('OpenAI API 当前额度不足或请求过快，请稍后重试。');
-    throw new Error(data.error?.message || `OpenAI API 请求失败（${response.status}）。`);
+    if (response.status === 401) throw new Error('DeepSeek API 密钥无效，请在“译文设置”中检查。');
+    if (response.status === 402) throw new Error('DeepSeek API 账户余额不足，请充值后重试。');
+    if (response.status === 429) throw new Error('DeepSeek API 请求过快，请稍后重试。');
+    throw new Error(data.error?.message || `DeepSeek API 请求失败（${response.status}）。`);
   }
-  const outputText = String(data.output_text || data.output?.flatMap(item => item.content || []).find(item => item.type === 'output_text')?.text || '').trim();
-  if (!outputText) throw new Error('OpenAI API 没有返回可用的参考译文。');
+  const outputText = String(data.choices?.[0]?.message?.content || '').trim();
+  if (!outputText) throw new Error('DeepSeek API 没有返回可用的参考译文。');
   return outputText.replace(/^\s*[“"]|[”"]\s*$/g, '').trim();
 }
 
@@ -3029,11 +3033,20 @@ async function generateReferenceTranslation(sentenceId, regenerate = false) {
   collectReader(article);
   const sentence = article.sentences.find(item => item.id === sentenceId);
   if (!sentence?.text?.trim() || (!regenerate && sentence.referenceTranslation?.trim())) return;
-  if (ui.translationProvider === 'openai' && !ui.aiApiKey) {
-    ui.translationGeneration.set(sentenceId, { status: 'error', error: '请先在“译文设置”中填写 OpenAI API 密钥。' });
+  if (ui.translationProvider === 'deepseek' && !ui.aiApiKey) {
+    ui.translationGeneration.set(sentenceId, { status: 'error', error: '请先在“译文设置”中填写 DeepSeek API 密钥。' });
     ui.translationSettingsOpen = true;
     render();
     return;
+  }
+  if (ui.translationProvider === 'deepseek' && localStorage.getItem('readquest-deepseek-consent') !== '1') {
+    const allowed = window.confirm('生成参考译文需要把当前英文句子和文章标题发送到 DeepSeek API。不会发送 PDF、中文翻译、笔记、生词或整篇文章。是否允许？');
+    if (!allowed) {
+      ui.translationGeneration.set(sentenceId, { status: 'error', error: '未启用 DeepSeek 翻译。你仍可手动填写参考译文。' });
+      render();
+      return;
+    }
+    localStorage.setItem('readquest-deepseek-consent', '1');
   }
   if (ui.translationProvider === 'mymemory' && localStorage.getItem('readquest-mymemory-consent') !== '1') {
     const allowed = window.confirm('生成参考译文需要把当前英文句子发送到 MyMemory 在线翻译服务。只发送这一句英文，不发送 PDF、笔记或个人信息。是否允许？');
@@ -3049,8 +3062,8 @@ async function generateReferenceTranslation(sentenceId, regenerate = false) {
   try {
     const sourceText = sentence.text.trim();
     let translatedText;
-    if (ui.translationProvider === 'openai') {
-      translatedText = await requestOpenAiTranslation(article, sentence);
+    if (ui.translationProvider === 'deepseek') {
+      translatedText = await requestDeepSeekTranslation(article, sentence);
     } else {
       if (new TextEncoder().encode(sourceText).length > 500) throw new Error('这个句子超过 MyMemory 的 500 字节限制，请切换 AI 翻译或手动填写。');
       const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(sourceText)}&langpair=en%7Czh-CN`);
@@ -3059,7 +3072,7 @@ async function generateReferenceTranslation(sentenceId, regenerate = false) {
       if (!response.ok || data.responseStatus !== 200 || !translatedText) throw new Error(data.responseDetails || '没有生成可用的参考译文。');
     }
     sentence.referenceTranslation = translatedText;
-    sentence.referenceTranslationSource = ui.translationProvider === 'openai' ? `OpenAI · ${ui.aiModel}` : 'MyMemory 在线翻译';
+    sentence.referenceTranslationSource = ui.translationProvider === 'deepseek' ? `DeepSeek · ${ui.aiModel}` : 'MyMemory 在线翻译';
     sentence.referenceTranslationGeneratedAt = new Date().toISOString();
     article.updatedAt = new Date().toISOString();
     await records.put('articles', article);
