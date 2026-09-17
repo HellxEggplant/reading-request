@@ -850,7 +850,7 @@ function readerPage() {
         </div>
       </section>
     </div>
-    ${pomodoroMarkup()}
+    ${ui.immersiveOpen ? '' : pomodoroMarkup()}
     ${reconstructionSidebarMarkup(article)}
     ${ui.immersiveOpen ? immersiveReaderMarkup(article, activeSentence, progress) : ''}
     ${ui.sourceDialog ? sourceDialogMarkup(article) : ''}
@@ -863,12 +863,14 @@ function immersiveReaderMarkup(article, sentence, progress) {
   const tokens = tokenize(sentence.text).map(token => /^[A-Za-z]+(?:['’\-][A-Za-z]+)*$/.test(token)
     ? `<button type="button" data-word="${esc(token)}">${esc(token)}</button>`
     : esc(token)).join('');
-  return `<section class="immersive-reader" role="dialog" aria-modal="true" aria-label="沉浸精读模式">
+  return `<section class="immersive-reader ${ui.musicSettingsOpen ? 'music-settings-open' : ''}" role="dialog" aria-modal="true" aria-label="沉浸精读模式">
     <header>
       <div><span>IMMERSIVE READING</span><b>${esc(article.title)}</b></div>
       <div class="immersive-header-actions">
-        <button type="button" data-music-settings aria-expanded="${ui.musicSettingsOpen}">♫ 轻音乐</button>
-        <button type="button" data-close-immersive aria-label="退出沉浸模式">退出 ×</button>
+        <button class="immersive-music-button ${ui.musicPlaying ? 'is-playing' : ''}" type="button" data-music-settings aria-expanded="${ui.musicSettingsOpen}">
+          <span class="music-button-icon" aria-hidden="true">♫</span><span><small>${ui.musicPlaying ? '正在播放' : '声音空间'}</small><b>轻音乐</b></span><i aria-hidden="true"></i>
+        </button>
+        <button class="immersive-exit-button" type="button" data-close-immersive aria-label="退出沉浸模式">退出 <span aria-hidden="true">×</span></button>
       </div>
     </header>
     <div class="immersive-progress"><i style="width:${progress}%"></i><span>${ui.readerSentenceIndex + 1} / ${article.sentences.length}</span></div>
@@ -883,6 +885,7 @@ function immersiveReaderMarkup(article, sentence, progress) {
       <button type="button" data-reader-sentence="1" ${ui.readerSentenceIndex >= article.sentences.length - 1 ? 'disabled' : ''}>下一句 →</button>
     </nav>
     ${musicSettingsMarkup()}
+    ${pomodoroMarkup()}
   </section>`;
 }
 
@@ -890,15 +893,20 @@ function musicSettingsMarkup() {
   if (!ui.musicSettingsOpen) return '';
   return `<aside class="immersive-music-panel" aria-label="轻音乐设置">
     <header><div><span>READING SOUNDSPACE</span><b>轻音乐空间</b></div><button type="button" data-close-music-settings aria-label="关闭音乐设置">×</button></header>
-    <p>内置“松风”氛围音无需网络。也可以填写可直接播放的 MP3、M4A、OGG、WAV 或 MP4 地址。</p>
+    <div class="music-now-playing ${ui.musicPlaying ? 'is-playing' : ''}">
+      <span class="music-album" aria-hidden="true">♫<i></i></span>
+      <div><small>${ui.musicPlaying ? 'NOW PLAYING' : 'READY TO PLAY'}</small><b>${ui.musicSource === 'builtin' ? '清溪 · 轻音乐' : '自定义声音'}</b><em>${ui.musicPlaying ? '让旋律陪你读完这一句' : '安静、舒缓、不打扰阅读'}</em></div>
+      <button type="button" data-music-play aria-label="${ui.musicPlaying ? '暂停音乐' : '播放音乐'}">${ui.musicPlaying ? 'Ⅱ' : '▶'}</button>
+    </div>
+    <p>默认使用无需联网的柔和轻音乐；你也可以换成可直接播放的音频或视频文件地址。</p>
     <div class="music-source-options">
-      <label class="${ui.musicSource === 'builtin' ? 'selected' : ''}"><input type="radio" name="musicSource" value="builtin" ${ui.musicSource === 'builtin' ? 'checked' : ''}><span><b>松风 · 内置</b><small>柔和风声与低频氛围</small></span></label>
+      <label class="${ui.musicSource === 'builtin' ? 'selected' : ''}"><input type="radio" name="musicSource" value="builtin" ${ui.musicSource === 'builtin' ? 'checked' : ''}><span><b>清溪 · 内置轻音乐</b><small>舒缓五声音阶，无需联网</small></span><i aria-hidden="true">推荐</i></label>
       <label class="${ui.musicSource === 'custom' ? 'selected' : ''}"><input type="radio" name="musicSource" value="custom" ${ui.musicSource === 'custom' ? 'checked' : ''}><span><b>自定义地址</b><small>音频或带声音的视频直链</small></span></label>
     </div>
     <label class="music-url-field ${ui.musicSource === 'custom' ? 'visible' : ''}">媒体网址<input type="url" data-music-url value="${esc(ui.musicUrl)}" placeholder="https://example.com/music.mp3"><small>视频网站的普通网页地址通常不能直接播放；请使用媒体文件直链。</small></label>
     <label class="music-volume">音量 <input type="range" min="0" max="1" step="0.01" value="${ui.musicVolume}" data-music-volume><b>${Math.round(ui.musicVolume * 100)}%</b></label>
     <label class="music-default-toggle"><input type="checkbox" data-music-default ${ui.musicDefaultOn ? 'checked' : ''}> 每次进入沉浸模式时默认播放</label>
-    <footer><button type="button" class="outline" data-music-play>${ui.musicPlaying ? '暂停音乐' : '试听播放'}</button><button type="button" class="primary" data-save-music-settings>保存设置</button></footer>
+    <footer><button type="button" class="primary" data-save-music-settings>保存设置</button></footer>
   </aside>`;
 }
 
@@ -1671,6 +1679,7 @@ function stopAmbientMusic() {
     ambientAudio = null;
   }
   if (ambientNodes) {
+    if (ambientNodes.interval) clearInterval(ambientNodes.interval);
     ambientNodes.sources.forEach(source => { try { source.stop(); } catch {} });
     ambientNodes.context.close().catch(() => {});
     ambientNodes = null;
@@ -1680,7 +1689,7 @@ function stopAmbientMusic() {
 
 function setAmbientVolume(value) {
   if (ambientAudio) ambientAudio.volume = value;
-  if (ambientNodes?.gain) ambientNodes.gain.gain.setTargetAtTime(value * .18, ambientNodes.context.currentTime, .08);
+  if (ambientNodes?.gain) ambientNodes.gain.gain.setTargetAtTime(value * .24, ambientNodes.context.currentTime, .08);
 }
 
 async function startAmbientMusic() {
@@ -1715,37 +1724,32 @@ async function startAmbientMusic() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     const context = new AudioContextClass();
     const gain = context.createGain();
-    gain.gain.value = ui.musicVolume * .18;
+    gain.gain.value = ui.musicVolume * .24;
     gain.connect(context.destination);
 
-    const buffer = context.createBuffer(1, context.sampleRate * 3, context.sampleRate);
-    const data = buffer.getChannelData(0);
-    let last = 0;
-    for (let index = 0; index < data.length; index += 1) {
-      last = (last + .018 * (Math.random() * 2 - 1)) / 1.018;
-      data[index] = last * 2.2;
-    }
-    const wind = context.createBufferSource();
-    wind.buffer = buffer;
-    wind.loop = true;
-    const filter = context.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 720;
-    wind.connect(filter).connect(gain);
-
-    const toneGain = context.createGain();
-    toneGain.gain.value = .035;
-    toneGain.connect(gain);
-    const tones = [174.61, 261.63].map(frequency => {
-      const oscillator = context.createOscillator();
-      oscillator.type = 'sine';
-      oscillator.frequency.value = frequency;
-      oscillator.connect(toneGain);
-      oscillator.start();
-      return oscillator;
-    });
-    wind.start();
-    ambientNodes = { context, gain, sources: [wind, ...tones] };
+    const sources = new Set();
+    const melody = [261.63, 329.63, 392, 440, 392, 329, 293.66, 261.63];
+    const playPhrase = () => {
+      const phraseStart = context.currentTime + .08;
+      melody.forEach((frequency, index) => {
+        const oscillator = context.createOscillator();
+        const envelope = context.createGain();
+        const start = phraseStart + index * 1.55;
+        oscillator.type = index % 3 === 1 ? 'triangle' : 'sine';
+        oscillator.frequency.value = frequency;
+        envelope.gain.setValueAtTime(.0001, start);
+        envelope.gain.exponentialRampToValueAtTime(index % 2 ? .13 : .17, start + .16);
+        envelope.gain.exponentialRampToValueAtTime(.0001, start + 1.42);
+        oscillator.connect(envelope).connect(gain);
+        oscillator.start(start);
+        oscillator.stop(start + 1.5);
+        sources.add(oscillator);
+        oscillator.addEventListener('ended', () => sources.delete(oscillator), { once: true });
+      });
+    };
+    playPhrase();
+    const interval = setInterval(playPhrase, 12400);
+    ambientNodes = { context, gain, sources, interval };
     ui.musicPlaying = true;
   } catch {
     stopAmbientMusic();
@@ -1796,11 +1800,13 @@ function closeMusicSettings() {
 
 function tomatoPositionBounds(timer) {
   const margin = window.innerWidth <= 760 ? 10 : 14;
+  const immersiveNavigation = document.querySelector('.immersive-navigation');
+  const reservedBottom = immersiveNavigation ? immersiveNavigation.offsetHeight + margin : margin;
   return {
     minX: margin,
     minY: margin,
     maxX: Math.max(margin, window.innerWidth - timer.offsetWidth - margin),
-    maxY: Math.max(margin, window.innerHeight - timer.offsetHeight - margin),
+    maxY: Math.max(margin, window.innerHeight - timer.offsetHeight - reservedBottom),
   };
 }
 
