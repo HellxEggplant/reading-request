@@ -71,12 +71,6 @@ const ui = {
   pomodoroAutoStart: readBrowserSetting('local', 'reading-request-pomodoro-auto', '1') !== '0',
   heroSlide: 0,
   immersiveOpen: false,
-  musicSettingsOpen: false,
-  musicPlaying: false,
-  musicDefaultOn: readBrowserSetting('local', 'reading-request-music-default', '1') !== '0',
-  musicSource: readBrowserSetting('local', 'reading-request-music-source', 'builtin'),
-  musicUrl: readBrowserSetting('local', 'reading-request-music-url'),
-  musicVolume: Number(readBrowserSetting('local', 'reading-request-music-volume', '.32')) || .32,
   translationSettingsOpen: false,
   translationProvider: readBrowserSetting('local', 'readquest-translation-provider', 'mymemory') === 'deepseek' ? 'deepseek' : 'mymemory',
   aiApiKey: readBrowserSetting('session', 'readquest-deepseek-api-key'),
@@ -87,8 +81,6 @@ let dbPromise;
 let difficultHintTimer;
 let pomodoroTimer;
 let heroCarouselTimer;
-let ambientAudio;
-let ambientNodes;
 let tomatoWasDragged = false;
 
 function openDatabase() {
@@ -860,54 +852,62 @@ function readerPage() {
 
 function immersiveReaderMarkup(article, sentence, progress) {
   if (!sentence) return '';
-  const tokens = tokenize(sentence.text).map(token => /^[A-Za-z]+(?:['’\-][A-Za-z]+)*$/.test(token)
-    ? `<button type="button" data-word="${esc(token)}">${esc(token)}</button>`
-    : esc(token)).join('');
-  return `<section class="immersive-reader ${ui.musicSettingsOpen ? 'music-settings-open' : ''}" role="dialog" aria-modal="true" aria-label="沉浸精读模式">
+  return `<section class="immersive-reader" role="dialog" aria-modal="true" aria-label="沉浸精读模式">
     <header>
       <div><span>IMMERSIVE READING</span><b>${esc(article.title)}</b></div>
       <div class="immersive-header-actions">
-        <button class="immersive-music-button ${ui.musicPlaying ? 'is-playing' : ''}" type="button" data-music-settings aria-expanded="${ui.musicSettingsOpen}">
-          <span class="music-button-icon" aria-hidden="true">♫</span><span><small>${ui.musicPlaying ? '正在播放' : '声音空间'}</small><b>轻音乐</b></span><i aria-hidden="true"></i>
-        </button>
         <button class="immersive-exit-button" type="button" data-close-immersive aria-label="退出沉浸模式">退出 <span aria-hidden="true">×</span></button>
       </div>
     </header>
     <div class="immersive-progress"><i style="width:${progress}%"></i><span>${ui.readerSentenceIndex + 1} / ${article.sentences.length}</span></div>
-    <main>
-      <p class="immersive-kicker">第 ${String(ui.readerSentenceIndex + 1).padStart(2, '0')} 句</p>
-      <article class="immersive-sentence ${sentence.difficult ? 'difficult' : ''}">${tokens}</article>
-      <label class="immersive-translation"><span>我的中文理解</span><textarea data-immersive-translation placeholder="写下你对这句话的理解…">${esc(sentence.translation || '')}</textarea></label>
-    </main>
+    <main>${immersiveSentenceMarkup(article, sentence)}</main>
     <nav class="immersive-navigation" aria-label="沉浸模式逐句切换">
       <button type="button" data-reader-sentence="-1" ${ui.readerSentenceIndex <= 0 ? 'disabled' : ''}>← 上一句</button>
       <span>${sentence.difficult ? '◆ 长难句' : '逐句精读'}</span>
       <button type="button" data-reader-sentence="1" ${ui.readerSentenceIndex >= article.sentences.length - 1 ? 'disabled' : ''}>下一句 →</button>
     </nav>
-    ${musicSettingsMarkup()}
     ${pomodoroMarkup()}
   </section>`;
 }
 
-function musicSettingsMarkup() {
-  if (!ui.musicSettingsOpen) return '';
-  return `<aside class="immersive-music-panel" aria-label="轻音乐设置">
-    <header><div><span>READING SOUNDSPACE</span><b>轻音乐空间</b></div><button type="button" data-close-music-settings aria-label="关闭音乐设置">×</button></header>
-    <div class="music-now-playing ${ui.musicPlaying ? 'is-playing' : ''}">
-      <span class="music-album" aria-hidden="true">♫<i></i></span>
-      <div><small>${ui.musicPlaying ? 'NOW PLAYING' : 'READY TO PLAY'}</small><b>${ui.musicSource === 'builtin' ? '清溪 · 轻音乐' : '自定义声音'}</b><em>${ui.musicPlaying ? '让旋律陪你读完这一句' : '安静、舒缓、不打扰阅读'}</em></div>
-      <button type="button" data-music-play aria-label="${ui.musicPlaying ? '暂停音乐' : '播放音乐'}">${ui.musicPlaying ? 'Ⅱ' : '▶'}</button>
-    </div>
-    <p>默认使用无需联网的柔和轻音乐；你也可以换成可直接播放的音频或视频文件地址。</p>
-    <div class="music-source-options">
-      <label class="${ui.musicSource === 'builtin' ? 'selected' : ''}"><input type="radio" name="musicSource" value="builtin" ${ui.musicSource === 'builtin' ? 'checked' : ''}><span><b>清溪 · 内置轻音乐</b><small>舒缓五声音阶，无需联网</small></span><i aria-hidden="true">推荐</i></label>
-      <label class="${ui.musicSource === 'custom' ? 'selected' : ''}"><input type="radio" name="musicSource" value="custom" ${ui.musicSource === 'custom' ? 'checked' : ''}><span><b>自定义地址</b><small>音频或带声音的视频直链</small></span></label>
-    </div>
-    <label class="music-url-field ${ui.musicSource === 'custom' ? 'visible' : ''}">媒体网址<input type="url" data-music-url value="${esc(ui.musicUrl)}" placeholder="https://example.com/music.mp3"><small>视频网站的普通网页地址通常不能直接播放；请使用媒体文件直链。</small></label>
-    <label class="music-volume">音量 <input type="range" min="0" max="1" step="0.01" value="${ui.musicVolume}" data-music-volume><b>${Math.round(ui.musicVolume * 100)}%</b></label>
-    <label class="music-default-toggle"><input type="checkbox" data-music-default ${ui.musicDefaultOn ? 'checked' : ''}> 每次进入沉浸模式时默认播放</label>
-    <footer><button type="button" class="primary" data-save-music-settings>保存设置</button></footer>
-  </aside>`;
+function immersiveSentenceMarkup(article, sentence) {
+  const tokens = tokenize(sentence.text).map(token => /^[A-Za-z]+(?:['’\-][A-Za-z]+)*$/.test(token)
+    ? `<button type="button" data-word="${esc(token)}">${esc(token)}</button>`
+    : esc(token)).join('');
+  return `
+      <p class="immersive-kicker">第 ${String(ui.readerSentenceIndex + 1).padStart(2, '0')} 句</p>
+      <article class="immersive-sentence ${sentence.difficult ? 'difficult' : ''}">${tokens}</article>
+      <label class="immersive-translation"><span>我的中文理解</span><textarea data-immersive-translation placeholder="写下你对这句话的理解…">${esc(sentence.translation || '')}</textarea></label>
+  `;
+}
+
+function updateImmersiveSentence(article) {
+  const immersive = document.querySelector('.immersive-reader');
+  const sentence = article.sentences[ui.readerSentenceIndex];
+  if (!immersive || !sentence) return render();
+  const translated = article.sentences.filter(item => item.translation?.trim()).length;
+  const progress = article.sentences.length ? Math.round(translated / article.sentences.length * 100) : 0;
+  immersive.querySelector('main').innerHTML = immersiveSentenceMarkup(article, sentence);
+  const progressBar = immersive.querySelector('.immersive-progress i');
+  if (progressBar) progressBar.style.width = `${progress}%`;
+  const progressText = immersive.querySelector('.immersive-progress span');
+  if (progressText) progressText.textContent = `${ui.readerSentenceIndex + 1} / ${article.sentences.length}`;
+  const previous = immersive.querySelector('[data-reader-sentence="-1"]');
+  const next = immersive.querySelector('[data-reader-sentence="1"]');
+  if (previous) previous.disabled = ui.readerSentenceIndex <= 0;
+  if (next) next.disabled = ui.readerSentenceIndex >= article.sentences.length - 1;
+  const status = immersive.querySelector('.immersive-navigation > span');
+  if (status) status.textContent = sentence.difficult ? '◆ 长难句' : '逐句精读';
+  immersive.querySelectorAll('[data-word]').forEach(button => button.addEventListener('click', () => openWordDefinition(button.dataset.word)));
+  immersive.querySelector('[data-immersive-translation]')?.addEventListener('input', syncImmersiveTranslation);
+  immersive.querySelector('main')?.scrollTo({ top: 0 });
+}
+
+function syncImmersiveTranslation(event) {
+  const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+  const sentence = article?.sentences[ui.readerSentenceIndex];
+  if (!sentence) return;
+  sentence.translation = event.target.value;
 }
 
 function pomodoroMarkup() {
@@ -1179,7 +1179,6 @@ function bind() {
   });
 
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
-    if (ui.immersiveOpen || ui.musicPlaying) stopAmbientMusic();
     ui.view = button.dataset.view;
     ui.selectedArticleId = null;
     ui.sourceDialog = false;
@@ -1187,7 +1186,6 @@ function bind() {
     ui.articleEditId = null;
     ui.wordDialog = null;
     ui.immersiveOpen = false;
-    ui.musicSettingsOpen = false;
     render();
   }));
 
@@ -1556,33 +1554,7 @@ function bind() {
   document.querySelector('[data-complete-reader]')?.addEventListener('click', () => saveReader(true));
   document.querySelector('[data-open-immersive]')?.addEventListener('click', openImmersiveReader);
   document.querySelector('[data-close-immersive]')?.addEventListener('click', closeImmersiveReader);
-  document.querySelector('[data-music-settings]')?.addEventListener('click', () => {
-    if (ui.musicSettingsOpen) closeMusicSettings();
-    else {
-      ui.musicSettingsOpen = true;
-      render();
-    }
-  });
-  document.querySelector('[data-close-music-settings]')?.addEventListener('click', closeMusicSettings);
-  document.querySelectorAll('input[name="musicSource"]').forEach(input => input.addEventListener('change', event => {
-    document.querySelectorAll('.music-source-options label').forEach(label => label.classList.toggle('selected', label.contains(event.target)));
-    document.querySelector('.music-url-field')?.classList.toggle('visible', event.target.value === 'custom');
-  }));
-  document.querySelector('[data-music-volume]')?.addEventListener('input', event => {
-    ui.musicVolume = Number(event.target.value);
-    event.target.nextElementSibling.textContent = `${Math.round(ui.musicVolume * 100)}%`;
-    setAmbientVolume(ui.musicVolume);
-  });
-  document.querySelector('[data-music-play]')?.addEventListener('click', toggleAmbientMusic);
-  document.querySelector('[data-save-music-settings]')?.addEventListener('click', saveMusicSettings);
-  document.querySelector('[data-immersive-translation]')?.addEventListener('input', event => {
-    const article = ui.articles.find(item => item.id === ui.selectedArticleId);
-    const sentence = article?.sentences[ui.readerSentenceIndex];
-    if (!sentence) return;
-    sentence.translation = event.target.value;
-    const regularInput = document.querySelector('.sentence-card [data-translation]');
-    if (regularInput) regularInput.value = event.target.value;
-  });
+  document.querySelector('[data-immersive-translation]')?.addEventListener('input', syncImmersiveTranslation);
   document.querySelector('[data-pomodoro-panel-toggle]')?.addEventListener('click', () => {
     if (tomatoWasDragged) {
       tomatoWasDragged = false;
@@ -1651,9 +1623,7 @@ async function openImmersiveReader() {
   const article = ui.articles.find(item => item.id === ui.selectedArticleId);
   if (article) collectReader(article);
   ui.immersiveOpen = true;
-  ui.musicSettingsOpen = false;
   render();
-  if (ui.musicDefaultOn) startAmbientMusic();
   if (window.innerWidth > 760) try { await document.documentElement.requestFullscreen?.(); } catch {}
 }
 
@@ -1666,135 +1636,7 @@ async function closeImmersiveReader() {
     await records.put('articles', article);
   }
   ui.immersiveOpen = false;
-  ui.musicSettingsOpen = false;
-  stopAmbientMusic();
   if (document.fullscreenElement) try { await document.exitFullscreen(); } catch {}
-  render();
-}
-
-function stopAmbientMusic() {
-  if (ambientAudio) {
-    ambientAudio.pause();
-    ambientAudio.src = '';
-    ambientAudio = null;
-  }
-  if (ambientNodes) {
-    if (ambientNodes.interval) clearInterval(ambientNodes.interval);
-    ambientNodes.sources.forEach(source => { try { source.stop(); } catch {} });
-    ambientNodes.context.close().catch(() => {});
-    ambientNodes = null;
-  }
-  ui.musicPlaying = false;
-}
-
-function setAmbientVolume(value) {
-  if (ambientAudio) ambientAudio.volume = value;
-  if (ambientNodes?.gain) ambientNodes.gain.gain.setTargetAtTime(value * .24, ambientNodes.context.currentTime, .08);
-}
-
-async function startAmbientMusic() {
-  stopAmbientMusic();
-  if (ui.musicSource === 'custom') {
-    let url;
-    try {
-      url = new URL(ui.musicUrl);
-      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('protocol');
-    } catch {
-      toast('请填写可直接播放的音频或视频媒体地址。', true);
-      return;
-    }
-    ambientAudio = new Audio(url.href);
-    ambientAudio.loop = true;
-    ambientAudio.volume = ui.musicVolume;
-    ambientAudio.addEventListener('error', () => {
-      stopAmbientMusic();
-      toast('这个地址无法直接播放。请换成 MP3、M4A、OGG、WAV 或 MP4 文件直链。', true);
-      render();
-    }, { once: true });
-    try {
-      await ambientAudio.play();
-      ui.musicPlaying = true;
-    } catch {
-      stopAmbientMusic();
-      toast('浏览器未能播放这个媒体地址，请检查链接或点击后重试。', true);
-    }
-    return;
-  }
-  try {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    const context = new AudioContextClass();
-    const gain = context.createGain();
-    gain.gain.value = ui.musicVolume * .24;
-    gain.connect(context.destination);
-
-    const sources = new Set();
-    const melody = [261.63, 329.63, 392, 440, 392, 329, 293.66, 261.63];
-    const playPhrase = () => {
-      const phraseStart = context.currentTime + .08;
-      melody.forEach((frequency, index) => {
-        const oscillator = context.createOscillator();
-        const envelope = context.createGain();
-        const start = phraseStart + index * 1.55;
-        oscillator.type = index % 3 === 1 ? 'triangle' : 'sine';
-        oscillator.frequency.value = frequency;
-        envelope.gain.setValueAtTime(.0001, start);
-        envelope.gain.exponentialRampToValueAtTime(index % 2 ? .13 : .17, start + .16);
-        envelope.gain.exponentialRampToValueAtTime(.0001, start + 1.42);
-        oscillator.connect(envelope).connect(gain);
-        oscillator.start(start);
-        oscillator.stop(start + 1.5);
-        sources.add(oscillator);
-        oscillator.addEventListener('ended', () => sources.delete(oscillator), { once: true });
-      });
-    };
-    playPhrase();
-    const interval = setInterval(playPhrase, 12400);
-    ambientNodes = { context, gain, sources, interval };
-    ui.musicPlaying = true;
-  } catch {
-    stopAmbientMusic();
-    toast('当前浏览器暂时无法播放内置氛围音。', true);
-  }
-}
-
-async function toggleAmbientMusic() {
-  const sourceInput = document.querySelector('input[name="musicSource"]:checked');
-  const urlInput = document.querySelector('[data-music-url]');
-  if (sourceInput) ui.musicSource = sourceInput.value;
-  if (urlInput) ui.musicUrl = urlInput.value.trim();
-  if (ui.musicPlaying) stopAmbientMusic();
-  else await startAmbientMusic();
-  render();
-}
-
-function saveMusicSettings() {
-  const sourceInput = document.querySelector('input[name="musicSource"]:checked');
-  const urlInput = document.querySelector('[data-music-url]');
-  const defaultInput = document.querySelector('[data-music-default]');
-  const volumeInput = document.querySelector('[data-music-volume]');
-  if (sourceInput) ui.musicSource = sourceInput.value;
-  if (urlInput) ui.musicUrl = urlInput.value.trim();
-  if (defaultInput) ui.musicDefaultOn = defaultInput.checked;
-  if (volumeInput) ui.musicVolume = Number(volumeInput.value);
-  try {
-    localStorage.setItem('reading-request-music-source', ui.musicSource);
-    localStorage.setItem('reading-request-music-url', ui.musicUrl);
-    localStorage.setItem('reading-request-music-default', ui.musicDefaultOn ? '1' : '0');
-    localStorage.setItem('reading-request-music-volume', String(ui.musicVolume));
-  } catch {}
-  ui.musicSettingsOpen = false;
-  setAmbientVolume(ui.musicVolume);
-  render();
-  toast('轻音乐设置已保存。');
-}
-
-function closeMusicSettings() {
-  ui.musicSource = readBrowserSetting('local', 'reading-request-music-source', 'builtin');
-  ui.musicUrl = readBrowserSetting('local', 'reading-request-music-url');
-  ui.musicDefaultOn = readBrowserSetting('local', 'reading-request-music-default', '1') !== '0';
-  ui.musicVolume = Number(readBrowserSetting('local', 'reading-request-music-volume', '.32')) || .32;
-  ui.musicSettingsOpen = false;
-  setAmbientVolume(ui.musicVolume);
   render();
 }
 
@@ -1929,16 +1771,23 @@ async function recordPracticeResult(article, sentence, correct, total) {
 async function changeReaderSentence(direction) {
   const article = ui.articles.find(item => item.id === ui.selectedArticleId);
   if (!article || !direction) return;
-  collectReader(article);
+  const immersiveInput = document.querySelector('[data-immersive-translation]');
+  if (immersiveInput && article.sentences[ui.readerSentenceIndex]) {
+    article.sentences[ui.readerSentenceIndex].translation = immersiveInput.value;
+  }
+  if (!ui.immersiveOpen) collectReader(article);
   const nextIndex = Math.max(0, Math.min(article.sentences.length - 1, ui.readerSentenceIndex + direction));
   if (nextIndex === ui.readerSentenceIndex) return;
   article.updatedAt = new Date().toISOString();
-  await records.put('articles', article);
-  await recordStudySnapshot(article);
   ui.readerCardDirection = direction < 0 ? 'prev' : 'next';
   ui.readerSentenceIndex = nextIndex;
-  render();
-  document.querySelector('.sentence-list')?.scrollTo({ top: 0 });
+  if (ui.immersiveOpen) updateImmersiveSentence(article);
+  else {
+    render();
+    document.querySelector('.sentence-list')?.scrollTo({ top: 0 });
+  }
+  await records.put('articles', article);
+  await recordStudySnapshot(article);
 }
 
 async function loadWebArticle(urlValue) {
