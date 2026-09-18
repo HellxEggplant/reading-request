@@ -1965,6 +1965,64 @@ label:focus-within {
   box-shadow: inset 4px 0 #526c5a;
 }
 
+.word-ai-dictionary {
+  background: linear-gradient(135deg, #f6eee4, #fffaf2 68%);
+  box-shadow: inset 4px 0 #a43c2f, 0 10px 28px rgba(80, 52, 33, .07);
+}
+
+.word-ai-dictionary .word-section-title b { color: #96362c; }
+
+.word-ai-loading {
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #6f665c;
+  font-size: 13px;
+}
+
+.word-ai-loading i {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #d8c9b9;
+  border-top-color: #a43c2f;
+  border-radius: 50%;
+  animation: word-spin .8s linear infinite;
+}
+
+.word-ai-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.word-ai-empty p { margin: 0; color: #6d6258; font-size: 13px; line-height: 1.65; }
+.word-ai-empty button,
+.word-ai-result footer button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid #b7685e;
+  border-radius: 999px;
+  background: #fffaf4;
+  color: #8f3028;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.word-ai-result { display: grid; gap: 10px; }
+.word-ai-result > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 9px; }
+.word-ai-result strong { color: #28231f; font: 750 23px/1.25 Georgia, "Songti SC", serif; }
+.word-ai-result > div > span { padding: 3px 7px; border-radius: 999px; background: #eadbd0; color: #7f443d; font-size: 10px; font-weight: 800; }
+.word-ai-result > p { margin: 0; color: #514942; font-size: 14px; line-height: 1.72; }
+.word-ai-result > small { display: flex; gap: 8px; color: #6f655b; font-size: 12px; line-height: 1.6; }
+.word-ai-result > small b { flex: 0 0 auto; color: #8f3028; }
+.word-ai-result footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid rgba(164,60,47,.16); }
+.word-ai-result footer span { color: #8a8075; font-size: 10px; }
+
 .word-english-dictionary {
   background: #fbfaf7;
   box-shadow: inset 4px 0 #a43c2f;
@@ -2075,6 +2133,9 @@ label:focus-within {
   .word-dictionary-section {
     padding: 15px 14px 14px 18px;
   }
+
+  .word-ai-empty,
+  .word-ai-result footer { align-items: flex-start; flex-direction: column; }
 }
 
 /* v25 sentence-by-sentence card deck */

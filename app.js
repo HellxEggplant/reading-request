@@ -201,18 +201,18 @@ function translationSettingsDialog() {
   return `<div class="translation-settings-overlay" data-translation-settings-overlay>
     <section class="translation-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="translationSettingsTitle">
       <form data-translation-settings-form>
-      <header><div><span>REFERENCE TRANSLATION</span><h2 id="translationSettingsTitle">参考译文设置</h2><p>选择生成参考译文时使用的翻译服务。</p></div><button type="button" data-close-translation-settings aria-label="关闭设置">×</button></header>
+      <header><div><span>LANGUAGE AI</span><h2 id="translationSettingsTitle">AI 与参考译文设置</h2><p>DeepSeek API 同时用于上下文参考译文和单词语境释义。</p></div><button type="button" data-close-translation-settings aria-label="关闭设置">×</button></header>
       <div class="translation-provider-options" role="radiogroup" aria-label="参考译文服务">
         <label class="${aiSelected ? '' : 'selected'}"><input type="radio" name="translationProvider" value="mymemory" ${aiSelected ? '' : 'checked'}><span><b>MyMemory</b><small>默认选项 · 免费在线机器翻译</small></span><em>DEFAULT</em></label>
-        <label class="${aiSelected ? 'selected' : ''}"><input type="radio" name="translationProvider" value="deepseek" ${aiSelected ? 'checked' : ''}><span><b>DeepSeek API</b><small>结合语境生成更自然的参考译文</small></span><em>AI</em></label>
+        <label class="${aiSelected ? 'selected' : ''}"><input type="radio" name="translationProvider" value="deepseek" ${aiSelected ? 'checked' : ''}><span><b>DeepSeek API</b><small>参考译文使用 AI，并启用单词语境释义</small></span><em>AI</em></label>
       </div>
-      <section class="ai-translation-settings ${aiSelected ? 'visible' : ''}">
+      <section class="ai-translation-settings visible">
         <label>DeepSeek API 密钥<div class="api-key-input"><input id="translationApiKey" type="password" value="${esc(ui.aiApiKey)}" placeholder="sk-…" autocomplete="new-password" spellcheck="false"><button type="button" data-toggle-api-key aria-label="显示 API 密钥" aria-pressed="false"><span aria-hidden="true">◉</span><b>显示</b></button></div></label>
-        <label>翻译模型<select id="translationAiModel">
+        <label>DeepSeek 模型<select id="translationAiModel">
           <option value="deepseek-flash" ${ui.aiModel === 'deepseek-flash' ? 'selected' : ''}>DeepSeek Flash · 快速经济</option>
           <option value="deepseek-v4-pro" ${ui.aiModel === 'deepseek-v4-pro' ? 'selected' : ''}>DeepSeek V4 Pro · 质量优先</option>
         </select></label>
-        <p><b>密钥安全提示</b> 密钥仅保留在当前标签页，关闭后自动清除，不会写入 GitHub 或书库备份。请勿在公共或不可信设备上填写。</p>
+        <p><b>密钥安全提示</b> 密钥仅保留在当前标签页，关闭后自动清除，不会写入 GitHub 或书库备份。单词释义会发送目标词、所在句及前后各最多两句，不发送 PDF 或个人笔记。</p>
       </section>
         <footer><button class="outline" type="button" data-close-translation-settings>取消</button><button class="primary" type="submit">保存设置</button></footer>
       </form>
@@ -1035,6 +1035,7 @@ function wordDialogMarkup(article) {
   const key = state.word.toLowerCase();
   const note = article.wordNotes?.[key] || '';
   const definition = state.definition;
+  const aiDefinition = definition?.aiContexts?.[state.sentenceId] || null;
   return `
     <dialog class="word-dialog" id="wordDialog">
       <header>
@@ -1050,6 +1051,7 @@ function wordDialogMarkup(article) {
         ${state.status === 'error' ? `<div class="word-error"><b>暂时无法获取在线词典</b><p>${esc(state.error || '请检查网络后重新打开。你仍然可以填写中文释义。')}</p><button type="button" class="outline" data-retry-word>重新查询</button></div>` : ''}
         ${definition ? `
           <div class="word-bilingual-dictionary">
+            ${aiWordDefinitionMarkup(state, aiDefinition)}
             ${ecdictSectionMarkup(definition.chinese)}
             <section class="word-dictionary-section word-english-dictionary">
               <div class="word-section-title"><span>英文词典</span><b>DATAMUSE</b></div>
@@ -1069,6 +1071,23 @@ function wordDialogMarkup(article) {
       </div>
       <footer><small>再次点击单词不会取消生词；请在上方生词列表中点“×”移除。</small><div><button type="button" class="outline" data-close-word-dialog>关闭</button><button type="button" class="primary" data-save-word-note>保存释义</button></div></footer>
     </dialog>`;
+}
+
+function aiWordDefinitionMarkup(state, entry) {
+  const status = state.aiStatus || (entry ? 'ready' : ui.aiApiKey ? 'idle' : 'needs-key');
+  if (!state.sentenceId) return '';
+  return `<section class="word-dictionary-section word-ai-dictionary">
+    <div class="word-section-title"><span>AI 语境释义</span><b>DEEPSEEK</b></div>
+    ${status === 'loading' ? '<div class="word-ai-loading"><i></i><span>正在结合上下文判断词义…</span></div>' : ''}
+    ${status === 'needs-key' ? '<div class="word-ai-empty"><p>填写 DeepSeek API 密钥后，可结合当前句和上下文生成准确的中文释义。</p><button type="button" data-open-word-ai-settings>设置 DeepSeek API</button></div>' : ''}
+    ${status === 'error' ? `<div class="word-ai-empty"><p>${esc(state.aiError || 'AI 语境释义生成失败。')}</p><button type="button" data-generate-ai-word="${esc(state.word)}">重新生成</button></div>` : ''}
+    ${entry ? `<div class="word-ai-result">
+      <div><strong>${esc(entry.meaning || '')}</strong>${entry.partOfSpeech ? `<span>${esc(entry.partOfSpeech)}</span>` : ''}</div>
+      ${entry.explanation ? `<p>${esc(entry.explanation)}</p>` : ''}
+      ${entry.collocation ? `<small><b>语境搭配</b>${esc(entry.collocation)}</small>` : ''}
+      <footer><span>基于当前句及前后语境</span><button type="button" data-generate-ai-word="${esc(state.word)}">重新生成</button></footer>
+    </div>` : status === 'idle' ? `<div class="word-ai-empty"><p>可以让 AI 结合当前文章语境解释这个词。</p><button type="button" data-generate-ai-word="${esc(state.word)}">生成语境释义</button></div>` : ''}
+  </section>`;
 }
 
 function ecdictSectionMarkup(entry) {
@@ -1164,7 +1183,6 @@ function bind() {
   document.querySelectorAll('input[name="translationProvider"]').forEach(input => input.addEventListener('change', event => {
     const dialog = event.target.closest('.translation-settings-dialog');
     dialog?.querySelectorAll('.translation-provider-options label').forEach(label => label.classList.toggle('selected', label.contains(event.target)));
-    dialog?.querySelector('.ai-translation-settings')?.classList.toggle('visible', event.target.value === 'deepseek');
   }));
   document.querySelector('[data-translation-settings-form]')?.addEventListener('submit', saveTranslationSettings);
   document.querySelector('[data-toggle-api-key]')?.addEventListener('click', event => {
@@ -1500,6 +1518,13 @@ function bind() {
   document.querySelectorAll('[data-close-word-dialog]').forEach(button => button.addEventListener('click', closeWordDialog));
   document.querySelector('[data-save-word-note]')?.addEventListener('click', saveWordNote);
   document.querySelector('[data-retry-word]')?.addEventListener('click', () => loadWordDefinition(ui.wordDialog?.word, true));
+  document.querySelector('[data-open-word-ai-settings]')?.addEventListener('click', () => {
+    ui.translationSettingsOpen = true;
+    render();
+  });
+  document.querySelectorAll('[data-generate-ai-word]').forEach(button => button.addEventListener('click', () => {
+    loadAiWordDefinition(button.dataset.generateAiWord, ui.wordDialog?.sentenceId, true);
+  }));
   document.querySelectorAll('[data-related-word]').forEach(button => button.addEventListener('click', () => openWordDefinition(button.dataset.relatedWord)));
   document.querySelector('[data-play-word-audio]')?.addEventListener('click', event => {
     const audio = new Audio(event.currentTarget.dataset.playWordAudio);
@@ -1513,7 +1538,7 @@ function bind() {
     speechSynthesis.speak(utterance);
   });
   const wordDialog = document.querySelector('#wordDialog');
-  if (wordDialog && !wordDialog.open) {
+  if (wordDialog && !ui.translationSettingsOpen && !wordDialog.open) {
     wordDialog.addEventListener('cancel', event => {
       event.preventDefault();
       closeWordDialog();
@@ -2560,11 +2585,22 @@ async function openWordDefinition(wordValue) {
   article.updatedAt = new Date().toISOString();
   const storedDefinition = article.wordDefinitions?.[word.toLowerCase()];
   const cached = storedDefinition?.dictionaryVersion >= 2 ? storedDefinition : null;
-  ui.wordDialog = { word, status: cached ? 'ready' : 'loading', definition: cached || null, error: '' };
+  const contextSentence = article.sentences[ui.readerSentenceIndex] || null;
+  const aiCached = contextSentence ? cached?.aiContexts?.[contextSentence.id] : null;
+  ui.wordDialog = {
+    word,
+    sentenceId: contextSentence?.id || null,
+    status: cached ? 'ready' : 'loading',
+    definition: cached || null,
+    error: '',
+    aiStatus: aiCached ? 'ready' : ui.aiApiKey ? 'loading' : 'needs-key',
+    aiError: '',
+  };
   render();
   await records.put('articles', article);
   if (isNewWord) await recordStudySnapshot(article, 'vocabulary');
   if (!cached) await loadWordDefinition(word);
+  if (ui.aiApiKey && contextSentence && !aiCached) await loadAiWordDefinition(word, contextSentence.id);
 }
 
 async function loadWordDefinition(wordValue, force = false) {
@@ -2576,11 +2612,11 @@ async function loadWordDefinition(wordValue, force = false) {
   const storedDefinition = article?.wordDefinitions?.[key];
   const cached = storedDefinition?.dictionaryVersion >= 2 ? storedDefinition : null;
   if (cached && !force) {
-    ui.wordDialog = { word, status: 'ready', definition: cached, error: '' };
+    ui.wordDialog = { ...ui.wordDialog, word, status: 'ready', definition: cached, error: '' };
     render();
     return;
   }
-  ui.wordDialog = { word, status: 'loading', definition: null, error: '' };
+  ui.wordDialog = { ...ui.wordDialog, word, status: 'loading', definition: null, error: '' };
   render();
   try {
     const shardKey = word.toLowerCase().replace(/[^a-z]/g, '').slice(0, 2) || '__';
@@ -2625,7 +2661,112 @@ async function loadWordDefinition(wordValue, force = false) {
     await cacheWordDefinition(articleId, key, word, normalized);
   } catch (error) {
     if (ui.wordDialog?.word.toLowerCase() === key) {
-      ui.wordDialog = { word, status: 'error', definition: null, error: error.message || '词典查询失败。' };
+      ui.wordDialog = { ...ui.wordDialog, word, status: 'error', definition: null, error: error.message || '词典查询失败。' };
+      render();
+    }
+  }
+}
+
+function confirmDeepSeekWordContext() {
+  if (localStorage.getItem('readquest-deepseek-word-context-consent-v1') === '1') return true;
+  const allowed = window.confirm('为了生成中文单词语境释义，需要把目标单词、文章标题、所在句及前后各最多两句发送到 DeepSeek API。不会发送 PDF、整篇文章、中文翻译、生词表或个人笔记。是否允许？');
+  if (allowed) localStorage.setItem('readquest-deepseek-word-context-consent-v1', '1');
+  return allowed;
+}
+
+async function requestDeepSeekWordDefinition(article, sentence, word) {
+  const context = buildTranslationContext(article, sentence);
+  const formatContext = items => items.length ? items.map((text, index) => `${index + 1}. ${text}`).join('\n') : '（无）';
+  const response = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${ui.aiApiKey}`,
+    },
+    body: JSON.stringify({
+      model: ui.aiModel || 'deepseek-flash',
+      messages: [
+        {
+          role: 'system',
+          content: '你是一名严谨的英语精读词典编辑。根据文章上下文解释目标英文单词在目标句中的具体含义。只输出一个 JSON 对象，不要 Markdown、代码围栏或额外文字。JSON 必须包含 meaning、partOfSpeech、explanation、collocation 四个字符串字段：meaning 是简洁自然的中文义项；partOfSpeech 使用中文词性；explanation 用一到两句话说明该词在本句为何取此义；collocation 写出目标句中的相关英文搭配并给出简短中文解释，没有固定搭配时为空字符串。不要翻译整句。',
+        },
+        {
+          role: 'user',
+          content: `文章标题：${article.title}\n目标单词：${word}\n\n上文（仅供理解语境）：\n${formatContext(context.before)}\n\n【目标句】\n${sentence.text.trim()}\n\n下文（仅供理解语境）：\n${formatContext(context.after)}\n\n任务：只解释目标单词在【目标句】中的中文含义。`,
+        },
+      ],
+      thinking: { type: 'disabled' },
+      max_tokens: 360,
+      temperature: 0.15,
+      stream: false,
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('DeepSeek API 密钥无效，请在“AI 与参考译文设置”中检查。');
+    if (response.status === 402) throw new Error('DeepSeek API 账户余额不足，请充值后重试。');
+    if (response.status === 429) throw new Error('DeepSeek API 请求过快，请稍后重试。');
+    throw new Error(data.error?.message || `DeepSeek API 请求失败（${response.status}）。`);
+  }
+  const outputText = String(data.choices?.[0]?.message?.content || '').trim();
+  const jsonText = outputText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = jsonText.indexOf('{');
+  const end = jsonText.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('DeepSeek 没有返回可识别的语境释义。');
+  let parsed;
+  try { parsed = JSON.parse(jsonText.slice(start, end + 1)); } catch { throw new Error('DeepSeek 返回的语境释义格式不完整，请重试。'); }
+  const result = {
+    meaning: String(parsed.meaning || '').trim(),
+    partOfSpeech: String(parsed.partOfSpeech || '').trim(),
+    explanation: String(parsed.explanation || '').trim(),
+    collocation: String(parsed.collocation || '').trim(),
+    model: ui.aiModel || 'deepseek-flash',
+    generatedAt: new Date().toISOString(),
+  };
+  if (!result.meaning) throw new Error('DeepSeek 没有返回中文义项，请重试。');
+  return result;
+}
+
+async function loadAiWordDefinition(wordValue, sentenceId, force = false) {
+  const word = String(wordValue || '').trim();
+  const articleId = ui.selectedArticleId;
+  const article = ui.articles.find(item => item.id === articleId);
+  const sentence = article?.sentences.find(item => item.id === sentenceId);
+  if (!word || !article || !sentence) return;
+  const key = word.toLowerCase();
+  const cached = article.wordDefinitions?.[key]?.aiContexts?.[sentenceId];
+  if (cached && !force) return;
+  if (!ui.aiApiKey) {
+    ui.wordDialog = { ...ui.wordDialog, aiStatus: 'needs-key', aiError: '' };
+    render();
+    return;
+  }
+  if (!confirmDeepSeekWordContext()) {
+    ui.wordDialog = { ...ui.wordDialog, aiStatus: 'idle', aiError: '' };
+    render();
+    return;
+  }
+  ui.wordDialog = { ...ui.wordDialog, aiStatus: 'loading', aiError: '' };
+  render();
+  try {
+    const aiDefinition = await requestDeepSeekWordDefinition(article, sentence, word);
+    const baseDefinition = article.wordDefinitions?.[key] || {
+      dictionaryVersion: 4,
+      phonetic: '',
+      audio: '',
+      origin: '',
+      meanings: [],
+      chinese: null,
+      source: 'DeepSeek AI 语境词典',
+    };
+    baseDefinition.dictionaryVersion = Math.max(4, baseDefinition.dictionaryVersion || 0);
+    baseDefinition.aiContexts ||= {};
+    baseDefinition.aiContexts[sentenceId] = aiDefinition;
+    ui.wordDialog = { ...ui.wordDialog, status: 'ready', definition: baseDefinition, error: '', aiStatus: 'ready', aiError: '' };
+    await cacheWordDefinition(articleId, key, word, baseDefinition);
+  } catch (error) {
+    if (ui.wordDialog?.word.toLowerCase() === key) {
+      ui.wordDialog = { ...ui.wordDialog, aiStatus: 'error', aiError: error.message || 'AI 语境释义生成失败。' };
       render();
     }
   }
@@ -2640,7 +2781,7 @@ async function cacheWordDefinition(articleId, key, word, definition) {
   await records.put('articles', latestArticle);
   await refreshData();
   if (ui.wordDialog?.word.toLowerCase() === key) {
-    ui.wordDialog = { word, status: 'ready', definition, error: '' };
+    ui.wordDialog = { ...ui.wordDialog, word, status: 'ready', definition, error: '' };
     render();
   }
 }
@@ -2841,6 +2982,8 @@ function saveTranslationSettings(event) {
   ui.aiApiKey = apiKey;
   ui.aiModel = model;
   ui.translationSettingsOpen = false;
+  const pendingWord = ui.wordDialog?.word;
+  const pendingSentenceId = ui.wordDialog?.sentenceId;
   try {
     localStorage.setItem('readquest-translation-provider', provider);
     localStorage.setItem('readquest-deepseek-model', model);
@@ -2848,7 +2991,10 @@ function saveTranslationSettings(event) {
     else sessionStorage.removeItem('readquest-deepseek-api-key');
   } catch {}
   render();
-  toast(provider === 'deepseek' ? '参考译文已切换为 DeepSeek AI 翻译。' : '参考译文已切换为 MyMemory。');
+  if (apiKey && pendingWord && pendingSentenceId) loadAiWordDefinition(pendingWord, pendingSentenceId);
+  toast(provider === 'deepseek'
+    ? 'DeepSeek 已用于参考译文和单词语境释义。'
+    : apiKey ? '参考译文使用 MyMemory；DeepSeek 已用于单词语境释义。' : '参考译文已切换为 MyMemory。');
 }
 
 function buildTranslationContext(article, sentence, radius = 2) {
