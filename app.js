@@ -86,6 +86,7 @@ let difficultHintTimer;
 let pomodoroTimer;
 let heroCarouselTimer;
 let tomatoWasDragged = false;
+let companionDragUntil = 0;
 
 function openDatabase() {
   if (dbPromise) return dbPromise;
@@ -232,7 +233,7 @@ function aiCompanionMarkup() {
       <span aria-hidden="true">AI</span><b>AI 精灵</b>
     </button>
     ${ui.aiCompanionOpen ? `<section class="ai-companion-panel">
-      <header><div><span>DEEPSEEK READING PARTNER</span><h2>AI 精灵</h2><p>${sentence ? `正在讨论第 ${ui.readerSentenceIndex + 1} 句` : '自由提问'}</p></div><button type="button" data-toggle-ai-companion aria-label="关闭 AI 精灵">×</button></header>
+      <header><div><span>陪你读懂每一句</span><h2>AI 精灵</h2><p>${sentence ? `一起看看第 ${ui.readerSentenceIndex + 1} 句` : '聊聊你的问题'}</p></div><button type="button" data-toggle-ai-companion aria-label="关闭 AI 精灵">×</button></header>
       <div class="ai-companion-messages" data-ai-companion-messages>
         ${messages.length ? messages.map(message => `<article class="${message.role}"><b>${message.role === 'user' ? '我' : 'AI 精灵'}</b><p>${esc(message.content)}</p></article>`).join('') : `<div class="ai-companion-welcome"><b>这句话哪里不明白？</b><p>可以问词义、语法、句子结构、翻译差异，也可以让我举例说明。</p><div><button type="button" data-ai-suggestion="帮我拆解这个句子的结构">拆解句子</button><button type="button" data-ai-suggestion="我的翻译哪里还可以改进？">检查翻译</button><button type="button" data-ai-suggestion="请解释这句话最容易误解的地方">易错点</button></div></div>`}
         ${ui.aiCompanionSending ? '<article class="assistant is-typing"><b>AI 精灵</b><p><i></i><i></i><i></i></p></article>' : ''}
@@ -245,6 +246,64 @@ function aiCompanionMarkup() {
       <footer><span>只发送当前句及必要上下文</span><button type="button" data-open-translation-settings>⚙ 设置</button></footer>
     </section>` : ''}
   </aside>`;
+}
+
+function bindCompanionDrag() {
+  const root = document.querySelector('.ai-companion');
+  const handle = root?.querySelector('.ai-companion-orb');
+  if (!handle) return;
+  let position;
+  try { position = JSON.parse(readBrowserSetting('local', 'readquest-companion-position', 'null')); } catch {}
+  const place = (x, y) => {
+    const width = handle.offsetWidth;
+    const height = handle.offsetHeight;
+    const left = Math.max(12, Math.min(innerWidth - width - 12, x));
+    const top = Math.max(12, Math.min(innerHeight - height - 12, y));
+    root.style.left = `${left}px`;
+    root.style.top = `${top}px`;
+    root.style.right = 'auto';
+    root.style.bottom = 'auto';
+    const panel = root.querySelector('.ai-companion-panel');
+    if (panel) {
+      const panelWidth = Math.min(390, innerWidth - 24);
+      const available = Math.max(top - 24, innerHeight - top - height - 24);
+      panel.style.width = `${panelWidth}px`;
+      panel.style.height = `${Math.min(580, available)}px`;
+      panel.style.left = `${Math.max(12, Math.min(innerWidth - panelWidth - 12, left)) - left}px`;
+      panel.style.top = top > innerHeight / 2 ? 'auto' : `${height + 10}px`;
+      panel.style.bottom = top > innerHeight / 2 ? `${height + 10}px` : 'auto';
+    }
+    return { x: left, y: top };
+  };
+  const initial = handle.getBoundingClientRect();
+  position = place(Number.isFinite(position?.x) ? position.x : initial.left, Number.isFinite(position?.y) ? position.y : initial.top);
+  let drag;
+  handle.title = '点击聊天 · 拖动调整位置';
+  handle.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return;
+    drag = { x: event.clientX, y: event.clientY, start: position, moved: false };
+    handle.setPointerCapture(event.pointerId);
+  });
+  handle.addEventListener('pointermove', event => {
+    if (!drag) return;
+    const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+    drag.moved = true;
+    root.classList.add('is-dragging');
+    position = place(drag.start.x + dx, drag.start.y + dy);
+  });
+  const end = event => {
+    if (drag?.moved) {
+      companionDragUntil = Date.now() + 350;
+      try { localStorage.setItem('readquest-companion-position', JSON.stringify(position)); } catch {}
+    }
+    drag = null;
+    root.classList.remove('is-dragging');
+    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+  };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+  window.onresize = () => { position = place(position.x, position.y); };
 }
 
 function libraryPage() {
@@ -1116,7 +1175,8 @@ function sentenceCard(sentence, index, article) {
         ? `<button class="${article.vocabulary.some(word => word.toLowerCase() === token.toLowerCase()) ? 'marked' : ''}" data-word="${esc(token)}">${esc(token)}</button>`
         : esc(token)).join('')}</p>
       <label>中文翻译<textarea data-translation placeholder="写下你对这句话的理解…">${esc(sentence.translation || '')}</textarea></label>
-      <label>语法或阅读笔记<input data-notes value="${esc(sentence.notes || '')}" placeholder="可选：句子结构、语法现象或疑问"></label>
+      <label>语法或阅读笔记<textarea data-notes rows="3" placeholder="记下句子结构、阅读收获或疑问…">${esc(sentence.notes || '')}</textarea></label>
+      ${review ? translationReviewMarkup(sentence, review) : ''}
       <section class="translation-check ${checkOpen ? 'is-open' : ''}">
         <button type="button" class="translation-check-toggle" data-toggle-translation-check="${sentence.id}">
           <span>${generation?.status === 'loading' ? '正在生成参考译文…' : '参考译文'}</span><b>${checkOpen ? '收起 −' : '查看 +'}</b>
@@ -1128,10 +1188,9 @@ function sentenceCard(sentence, index, article) {
             ${generation?.status === 'error' ? `<p class="translation-generation-error">${esc(generation.error)}</p>` : ''}
             <footer><small class="translation-source-line"><span>${referenceService} · 结果仅供核对，可修改。</span><button class="translation-settings-gear" type="button" data-open-translation-settings aria-label="DeepSeek AI 设置" aria-expanded="${ui.translationSettingsOpen}"><b aria-hidden="true">⚙</b><i role="tooltip">DeepSeek AI 设置</i></button></small><div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
             <section class="translation-ai-review">
-              <div class="translation-ai-review-head"><div><span>AI TRANSLATION CHECK</span><b>我的译文 × 参考译文</b></div><button type="button" data-review-translation="${sentence.id}" ${reviewState?.status === 'loading' ? 'disabled' : ''}>${review ? '重新校验' : 'AI 校验并整合'}</button></div>
+              <div class="translation-ai-review-head"><button type="button" data-review-translation="${sentence.id}" ${reviewState?.status === 'loading' ? 'disabled' : ''}>${reviewState?.status === 'loading' ? '正在校验…' : review ? '重新校验我的翻译' : '校验我的翻译'}</button></div>
               ${reviewState?.status === 'loading' ? '<p class="translation-review-loading"><i></i>正在核对准确性、遗漏信息和中文表达…</p>' : ''}
               ${reviewState?.status === 'error' ? `<p class="translation-generation-error">${esc(reviewState.error)}</p>` : ''}
-              ${review ? translationReviewMarkup(sentence, review) : '<p class="translation-review-empty">写完自己的中文翻译并生成参考译文后，让 AI 对照原句进行校验。</p>'}
             </section>
           </div>` : ''}
       </section>
@@ -1143,14 +1202,14 @@ function sentenceCard(sentence, index, article) {
 function translationReviewMarkup(sentence, review) {
   const strengths = Array.isArray(review.strengths) ? review.strengths : [];
   const issues = Array.isArray(review.issues) ? review.issues : [];
-  return `<div class="translation-review-result">
-    <header><strong>${Math.max(0, Math.min(100, Number(review.score) || 0))}<small>/100</small></strong><div><b>${esc(review.verdict || '校验完成')}</b><p>${esc(review.summary || '')}</p></div></header>
+  return `<details class="ai-reading-notes" open><summary>✦ AI 阅读建议</summary><div class="translation-review-result">
+    <p>${esc(review.summary || review.verdict || '')}</p>
     <div class="translation-review-columns">
       <section><span>做得好的地方</span>${strengths.length ? `<ul>${strengths.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : '<p>暂无补充。</p>'}</section>
       <section><span>需要改进</span>${issues.length ? `<ul>${issues.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : '<p>没有明显误译或遗漏。</p>'}</section>
     </div>
     <section class="integrated-translation"><span>整合译文</span><p>${esc(review.integratedTranslation || '')}</p><button type="button" data-use-integrated-translation="${sentence.id}">采用这版译文</button></section>
-  </div>`;
+  </div></details>`;
 }
 
 function tokenize(text) {
@@ -1597,6 +1656,7 @@ function bind() {
   document.querySelector('[data-complete-reader]')?.addEventListener('click', () => saveReader(true));
   document.querySelector('[data-open-immersive]')?.addEventListener('click', openImmersiveReader);
   document.querySelectorAll('[data-toggle-ai-companion]').forEach(button => button.addEventListener('click', () => {
+    if (Date.now() < companionDragUntil) return;
     const article = ui.articles.find(item => item.id === ui.selectedArticleId);
     if (article) collectReader(article);
     ui.aiCompanionOpen = !ui.aiCompanionOpen;
@@ -1604,6 +1664,7 @@ function bind() {
     render();
     if (ui.aiCompanionOpen) requestAnimationFrame(() => document.querySelector('[data-ai-companion-form] textarea')?.focus());
   }));
+  bindCompanionDrag();
   document.querySelectorAll('[data-ai-suggestion]').forEach(button => button.addEventListener('click', () => sendAiCompanionQuestion(button.dataset.aiSuggestion)));
   document.querySelector('[data-ai-companion-form]')?.addEventListener('submit', event => {
     event.preventDefault();

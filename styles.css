@@ -7260,6 +7260,44 @@ button:focus-visible {
   .ai-companion-panel { width: calc(100vw - 24px); height: min(68vh, 580px); }
 }
 
+/* Softer reading companion and compact translation workspace */
+.ai-companion { width: max-content; }
+.ai-companion-orb { touch-action: none; user-select: none; cursor: grab; background: linear-gradient(135deg,#527967,#304e42); border: 1px solid #ffffff80; box-shadow: 0 6px 20px #243c3426, inset 0 1px #ffffff40; padding: 8px 17px 8px 8px; }
+.ai-companion-orb span { background: linear-gradient(135deg,#fff4d8,#e7d5ab); font: 600 13px Georgia,serif; width: 36px; height: 36px; }
+.ai-companion-orb b { font-weight: 600; letter-spacing: .04em; }
+.ai-companion.is-dragging .ai-companion-orb { cursor: grabbing; box-shadow: 0 12px 28px #243c3438; }
+.ai-companion-panel { position: absolute; border: 1px solid #e1e6dc; border-radius: 22px; box-shadow: 0 18px 64px #20362d26; }
+.ai-companion-panel > header { background: linear-gradient(125deg,#ecf2e9,#faf7ee); border: 0; padding: 20px; }
+.ai-companion-panel > header span { color: #64816e; font: 12px/1.6 inherit; letter-spacing: .08em; }
+.ai-companion-panel h2 { font-size: 23px; margin: 3px 0; }
+.ai-companion-panel header button { border: 0; border-radius: 50%; background: #ffffffb3; }
+.ai-companion-welcome { border: 0; background: transparent; padding: 18px 8px; }
+.ai-companion-welcome > p { font-size: 14px; line-height: 1.8; }
+.ai-companion-welcome button { border: 0; border-radius: 18px; padding: 9px 13px; background: #edf2eb; color: #47624f; font-size: 13px; }
+.ai-companion-messages article { border-radius: 16px; padding: 12px 14px; }
+.ai-companion-messages article p { font-size: 14px; overflow-wrap: anywhere; }
+.ai-companion-messages .assistant { border: 0; background: #f2f4ed; border-bottom-left-radius: 4px; }
+.ai-companion-messages .user { border-bottom-right-radius: 4px; }
+.ai-companion-form { background: #fffdf8; border-color: #eee; }
+.ai-companion-form textarea { border-radius: 14px; border: 1px solid #dde3d8; font-family: inherit; font-size: 14px; }
+.ai-companion-form button { border-radius: 13px; background: #4d705b; }
+.ai-companion-panel > footer { border: 0; padding: 4px 16px 14px; font-size: 11px; }
+.sentence-card .ai-reading-notes { margin: 0 0 14px; padding: 12px 14px; border: 0; border-radius: 12px; background: #f0f3eb; }
+.ai-reading-notes > summary { color: #4b6755; cursor: pointer; font-size: 14px; }
+.ai-reading-notes .translation-review-result { margin-top: 10px; }
+.ai-reading-notes .translation-review-result > p { margin: 0; font-size: 14px; line-height: 1.7; }
+.ai-reading-notes .translation-review-columns { display: block; }
+.ai-reading-notes .translation-review-columns section { padding: 5px 0; border: 0; background: transparent; }
+.ai-reading-notes .translation-review-columns li { font-size: 14px; }
+.ai-reading-notes .integrated-translation { border: 0; border-radius: 10px; background: #fffdf8; }
+.sentence-card textarea[data-notes] { min-height: 84px; }
+.translation-check-body .translation-ai-review { margin: 0; padding: 8px 0 0; border: 0; }
+.translation-ai-review-head > button { background: transparent; border: 0; padding: 4px 0; color: #4d6756; font-size: 13px; }
+.translation-check-body > footer { flex-wrap: wrap; }
+.translation-check-body > footer > div { flex-wrap: wrap; }
+.translation-check-body .reference-translation-only > span { display: none; }
+@media (prefers-reduced-motion: reduce) { .ai-companion-panel { animation: none; } }
+
 /* Daily reading progress */
 .growth-heading {
   min-height: 150px;
