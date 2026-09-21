@@ -7152,6 +7152,114 @@ button:focus-visible {
   .hero-slide, .immersive-reader { animation: none; transition: none; }
 }
 
+/* v47 · unified DeepSeek learning tools */
+.deepseek-service-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 23px 10px;
+  padding: 13px 15px;
+  border: 1px solid #bcc8bd;
+  border-left: 4px solid #4d6756;
+  background: #eef2eb;
+}
+.deepseek-service-card > span { color: #6d756d; font: 800 9px ui-monospace, monospace; letter-spacing: .1em; }
+.deepseek-service-card > div { display: grid; gap: 2px; }
+.deepseek-service-card b { color: #28382e; font: 700 15px Georgia, "Songti SC", serif; }
+.deepseek-service-card small { color: #6a716a; font-size: 11px; }
+.deepseek-service-card em { padding: 5px 7px; background: #4d6756; color: white; font: 800 8px ui-monospace, monospace; font-style: normal; letter-spacing: .08em; }
+
+.ai-dictionary-entry { display: grid; gap: 14px; }
+.ai-dictionary-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 9px; padding-bottom: 11px; border-bottom: 1px solid #ddd4c7; }
+.ai-dictionary-heading strong { color: #24201c; font: 700 27px/1.1 Georgia, serif; }
+.ai-dictionary-heading em { color: #746b62; font: 500 13px Georgia, serif; font-style: normal; }
+.ai-dictionary-heading span { padding: 4px 7px; background: #e9eee7; color: #405746; font-size: 10px; font-weight: 800; }
+.ai-dictionary-entry > section { display: grid; gap: 7px; }
+.ai-dictionary-entry h3 { margin: 0; color: #91312b; font: 800 10px ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.ai-dictionary-entry ol { display: grid; gap: 6px; margin: 0; padding-left: 22px; }
+.ai-dictionary-entry li { padding-left: 3px; color: #342f29; font-size: 14px; line-height: 1.65; }
+.ai-context-meaning { display: grid; gap: 5px; padding: 12px 13px; border-left: 3px solid #ad632e; background: #f6ead9; }
+.ai-context-meaning > span { color: #8e2924; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+.ai-context-meaning p { margin: 0; color: #4b433b; font-size: 13px; line-height: 1.6; }
+
+.translation-ai-review { display: grid; gap: 12px; margin-top: 13px; padding-top: 13px; border-top: 1px solid #d7cec2; }
+.translation-ai-review-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.translation-ai-review-head > div { display: grid; gap: 4px; }
+.translation-ai-review-head span { color: #9a352c; font: 800 9px ui-monospace, monospace; letter-spacing: .1em; }
+.translation-ai-review-head b { color: #322d28; font-size: 14px; }
+.translation-ai-review-head > button,
+.integrated-translation button { min-height: 35px; padding: 7px 11px; border: 1px solid #4d6756; background: #4d6756; color: #fff; font-size: 11px; font-weight: 800; cursor: pointer; }
+.translation-ai-review-head > button:disabled { cursor: wait; opacity: .55; }
+.translation-review-empty { margin: 0; color: #81786d; font-size: 12px; line-height: 1.6; }
+.translation-review-loading { display: flex; align-items: center; gap: 9px; margin: 0; padding: 11px; background: #eef2eb; color: #4d5d50; font-size: 12px; }
+.translation-review-loading i { width: 14px; height: 14px; border: 2px solid #b8c3b8; border-top-color: #4d6756; border-radius: 50%; animation: spin .8s linear infinite; }
+.translation-review-result { display: grid; gap: 12px; }
+.translation-review-result > header { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 13px; padding: 12px; background: #edf1e9; }
+.translation-review-result > header strong { color: #385043; font: 800 30px/1 Georgia, serif; }
+.translation-review-result > header strong small { font-size: 11px; }
+.translation-review-result > header div { display: grid; gap: 3px; }
+.translation-review-result > header b { color: #2f3b32; font-size: 13px; }
+.translation-review-result > header p { margin: 0; color: #657066; font-size: 11px; line-height: 1.55; }
+.translation-review-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.translation-review-columns section { padding: 11px 12px; border: 1px solid #ddd4c7; background: #fff; }
+.translation-review-columns span,
+.integrated-translation > span { color: #8e2924; font: 800 10px ui-monospace, monospace; letter-spacing: .07em; }
+.translation-review-columns ul { display: grid; gap: 5px; margin: 8px 0 0; padding-left: 18px; }
+.translation-review-columns li,
+.translation-review-columns p { color: #4b443d; font-size: 12px; line-height: 1.6; }
+.integrated-translation { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; padding: 12px; border: 1px solid #c8baa9; background: #fffaf1; }
+.integrated-translation > span { grid-column: 1 / -1; }
+.integrated-translation p { margin: 0; color: #302b26; font: 14px/1.75 Georgia, "Songti SC", serif; }
+
+.ai-companion { position: fixed; z-index: 92; right: 24px; bottom: 92px; display: grid; justify-items: end; gap: 11px; pointer-events: none; }
+.ai-companion-orb,
+.ai-companion-panel { pointer-events: auto; }
+.ai-companion-orb { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 14px 6px 7px; border: 1px solid #2f4b3b; border-radius: 999px; background: #405f4c; color: #fff; box-shadow: 0 10px 26px rgba(43,57,47,.2); cursor: pointer; }
+.ai-companion-orb span { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 50%; background: #f1dfb8; color: #77342d; font: 900 10px ui-monospace, monospace; box-shadow: inset 0 0 0 2px rgba(255,255,255,.45); }
+.ai-companion-orb b { font-size: 13px; }
+.ai-companion-panel { order: -1; width: min(390px, calc(100vw - 28px)); height: min(610px, calc(100vh - 170px)); display: grid; grid-template-rows: auto 1fr auto auto; overflow: hidden; border: 1px solid #9e9385; background: #fffdf8; box-shadow: 0 24px 70px rgba(48,40,32,.25); animation: companion-in .2s ease-out; }
+.ai-companion-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding: 16px 17px; border-bottom: 1px solid #d8cfc2; background: #f3ede3; }
+.ai-companion-panel > header div { display: grid; gap: 3px; }
+.ai-companion-panel > header span { color: #9a352c; font: 800 8px ui-monospace, monospace; letter-spacing: .12em; }
+.ai-companion-panel h2 { margin: 0; color: #2c2823; font: 700 21px Georgia, "Songti SC", serif; }
+.ai-companion-panel header p { margin: 0; color: #766d63; font-size: 11px; }
+.ai-companion-panel header button { width: 31px; height: 31px; border: 1px solid #c8bdae; background: #fffaf1; color: #5b5148; font-size: 18px; cursor: pointer; }
+.ai-companion-messages { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 15px; overflow-y: auto; }
+.ai-companion-messages article { max-width: 88%; display: grid; gap: 5px; padding: 10px 12px; }
+.ai-companion-messages article b { font-size: 10px; }
+.ai-companion-messages article p { margin: 0; white-space: pre-wrap; font-size: 13px; line-height: 1.65; }
+.ai-companion-messages .user { align-self: flex-end; background: #4d6756; color: #fff; }
+.ai-companion-messages .assistant { align-self: flex-start; border: 1px solid #d8cfc2; background: #f7f2e9; color: #39332d; }
+.ai-companion-welcome { display: grid; gap: 7px; margin: auto 0; padding: 18px; border: 1px dashed #c7baaa; background: #faf5ec; text-align: center; }
+.ai-companion-welcome > b { color: #3c4f41; font: 700 17px Georgia, "Songti SC", serif; }
+.ai-companion-welcome > p { margin: 0; color: #756d63; font-size: 12px; line-height: 1.6; }
+.ai-companion-welcome > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 5px; }
+.ai-companion-welcome button { padding: 6px 8px; border: 1px solid #baad9e; background: #fffdf8; color: #534b43; font-size: 10px; cursor: pointer; }
+.ai-companion-form { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 11px 12px; border-top: 1px solid #d8cfc2; background: #f8f3eb; }
+.ai-companion-form textarea { min-height: 48px; max-height: 110px; padding: 9px 10px; resize: vertical; border: 1px solid #bfb3a5; background: #fff; color: #312c27; font: 13px/1.5 inherit; }
+.ai-companion-form button { align-self: stretch; padding: 8px 13px; border: 0; background: #9a352c; color: #fff; font-weight: 800; cursor: pointer; }
+.ai-companion-panel > footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-top: 1px solid #e1d9cf; color: #7b7369; font-size: 9px; }
+.ai-companion-panel > footer button { border: 0; background: transparent; color: #4d6756; font-size: 10px; font-weight: 800; cursor: pointer; }
+.ai-companion-error { margin: 0; padding: 8px 10px; background: #f8e7e2; color: #8e2924; font-size: 11px; line-height: 1.5; }
+.is-typing p { display: flex; gap: 4px; }
+.is-typing i { width: 5px; height: 5px; border-radius: 50%; background: #657665; animation: typing-dot .9s infinite alternate; }
+.is-typing i:nth-child(2) { animation-delay: .16s; }
+.is-typing i:nth-child(3) { animation-delay: .32s; }
+@keyframes companion-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes typing-dot { to { opacity: .25; transform: translateY(-3px); } }
+
+@media (max-width: 680px) {
+  .deepseek-service-card { margin-inline: 16px; grid-template-columns: 1fr auto; }
+  .deepseek-service-card > span { grid-column: 1 / -1; }
+  .translation-review-columns { grid-template-columns: 1fr; }
+  .integrated-translation { grid-template-columns: 1fr; }
+  .integrated-translation button { justify-self: start; }
+  .translation-ai-review-head { align-items: flex-start; flex-direction: column; }
+  .ai-companion { right: 12px; bottom: 82px; }
+  .ai-companion-panel { width: calc(100vw - 24px); height: min(68vh, 580px); }
+}
+
 /* Daily reading progress */
 .growth-heading {
   min-height: 150px;

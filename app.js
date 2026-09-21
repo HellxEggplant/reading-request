@@ -48,6 +48,7 @@ const ui = {
   articleEditId: null,
   translationCheckIds: new Set(),
   translationGeneration: new Map(),
+  translationReview: new Map(),
   practiceRevealIds: new Set(),
   reconstructionDialogSentenceId: null,
   reconstructionDrawerOpen: false,
@@ -72,9 +73,12 @@ const ui = {
   heroSlide: 0,
   immersiveOpen: false,
   translationSettingsOpen: false,
-  translationProvider: readBrowserSetting('local', 'readquest-translation-provider', 'mymemory') === 'deepseek' ? 'deepseek' : 'mymemory',
   aiApiKey: readBrowserSetting('session', 'readquest-deepseek-api-key'),
   aiModel: readBrowserSetting('local', 'readquest-deepseek-model', 'deepseek-flash'),
+  aiCompanionOpen: false,
+  aiCompanionSending: false,
+  aiCompanionMessages: [],
+  aiCompanionError: '',
 };
 
 let dbPromise;
@@ -191,33 +195,56 @@ function shell(content) {
     <div class="app-shell">
       <main class="main">${content}</main>
     </div>
+    ${aiCompanionMarkup()}
     ${translationSettingsDialog()}
   `;
 }
 
 function translationSettingsDialog() {
   if (!ui.translationSettingsOpen) return '';
-  const aiSelected = ui.translationProvider === 'deepseek';
   return `<div class="translation-settings-overlay" data-translation-settings-overlay>
     <section class="translation-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="translationSettingsTitle">
       <form data-translation-settings-form>
-      <header><div><span>LANGUAGE AI</span><h2 id="translationSettingsTitle">AI 与参考译文设置</h2><p>DeepSeek API 同时用于上下文参考译文和单词语境释义。</p></div><button type="button" data-close-translation-settings aria-label="关闭设置">×</button></header>
-      <div class="translation-provider-options" role="radiogroup" aria-label="参考译文服务">
-        <label class="${aiSelected ? '' : 'selected'}"><input type="radio" name="translationProvider" value="mymemory" ${aiSelected ? '' : 'checked'}><span><b>MyMemory</b><small>默认选项 · 免费在线机器翻译</small></span><em>DEFAULT</em></label>
-        <label class="${aiSelected ? 'selected' : ''}"><input type="radio" name="translationProvider" value="deepseek" ${aiSelected ? 'checked' : ''}><span><b>DeepSeek API</b><small>参考译文使用 AI，并启用单词语境释义</small></span><em>AI</em></label>
-      </div>
+      <header><div><span>LANGUAGE AI</span><h2 id="translationSettingsTitle">DeepSeek AI 设置</h2><p>一个接口用于参考译文、译文校验、双语词典和 AI 精灵。</p></div><button type="button" data-close-translation-settings aria-label="关闭设置">×</button></header>
+      <div class="deepseek-service-card"><span>统一 AI 服务</span><div><b>DeepSeek API</b><small>密钥只在当前标签页中使用</small></div><em>ACTIVE</em></div>
       <section class="ai-translation-settings visible">
         <label>DeepSeek API 密钥<div class="api-key-input"><input id="translationApiKey" type="password" value="${esc(ui.aiApiKey)}" placeholder="sk-…" autocomplete="new-password" spellcheck="false"><button type="button" data-toggle-api-key aria-label="显示 API 密钥" aria-pressed="false"><span aria-hidden="true">◉</span><b>显示</b></button></div></label>
         <label>DeepSeek 模型<select id="translationAiModel">
           <option value="deepseek-flash" ${ui.aiModel === 'deepseek-flash' ? 'selected' : ''}>DeepSeek Flash · 快速经济</option>
           <option value="deepseek-v4-pro" ${ui.aiModel === 'deepseek-v4-pro' ? 'selected' : ''}>DeepSeek V4 Pro · 质量优先</option>
         </select></label>
-        <p><b>密钥安全提示</b> 密钥仅保留在当前标签页，关闭后自动清除，不会写入 GitHub 或书库备份。单词释义会发送目标词、所在句及前后各最多两句，不发送 PDF 或个人笔记。</p>
+        <p><b>密钥安全提示</b> 密钥仅保留在当前标签页，关闭后自动清除，不会写入 GitHub 或书库备份。使用具体功能前，网站会说明即将发送的文字范围并征求确认。</p>
       </section>
         <footer><button class="outline" type="button" data-close-translation-settings>取消</button><button class="primary" type="submit">保存设置</button></footer>
       </form>
     </section>
   </div>`;
+}
+
+function aiCompanionMarkup() {
+  if (ui.view !== 'reader' || !ui.selectedArticleId) return '';
+  const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+  const sentence = article?.sentences?.[ui.readerSentenceIndex];
+  if (!article) return '';
+  const messages = ui.aiCompanionMessages;
+  return `<aside class="ai-companion ${ui.aiCompanionOpen ? 'is-open' : ''}" aria-label="AI 精灵">
+    <button type="button" class="ai-companion-orb" data-toggle-ai-companion aria-expanded="${ui.aiCompanionOpen}">
+      <span aria-hidden="true">AI</span><b>AI 精灵</b>
+    </button>
+    ${ui.aiCompanionOpen ? `<section class="ai-companion-panel">
+      <header><div><span>DEEPSEEK READING PARTNER</span><h2>AI 精灵</h2><p>${sentence ? `正在讨论第 ${ui.readerSentenceIndex + 1} 句` : '自由提问'}</p></div><button type="button" data-toggle-ai-companion aria-label="关闭 AI 精灵">×</button></header>
+      <div class="ai-companion-messages" data-ai-companion-messages>
+        ${messages.length ? messages.map(message => `<article class="${message.role}"><b>${message.role === 'user' ? '我' : 'AI 精灵'}</b><p>${esc(message.content)}</p></article>`).join('') : `<div class="ai-companion-welcome"><b>这句话哪里不明白？</b><p>可以问词义、语法、句子结构、翻译差异，也可以让我举例说明。</p><div><button type="button" data-ai-suggestion="帮我拆解这个句子的结构">拆解句子</button><button type="button" data-ai-suggestion="我的翻译哪里还可以改进？">检查翻译</button><button type="button" data-ai-suggestion="请解释这句话最容易误解的地方">易错点</button></div></div>`}
+        ${ui.aiCompanionSending ? '<article class="assistant is-typing"><b>AI 精灵</b><p><i></i><i></i><i></i></p></article>' : ''}
+        ${ui.aiCompanionError ? `<p class="ai-companion-error">${esc(ui.aiCompanionError)}</p>` : ''}
+      </div>
+      <form class="ai-companion-form" data-ai-companion-form>
+        <textarea name="question" rows="2" placeholder="输入你的问题…" aria-label="向 AI 精灵提问" ${ui.aiCompanionSending ? 'disabled' : ''}></textarea>
+        <button type="submit" ${ui.aiCompanionSending ? 'disabled' : ''}>发送</button>
+      </form>
+      <footer><span>只发送当前句及必要上下文</span><button type="button" data-open-translation-settings>⚙ 设置</button></footer>
+    </section>` : ''}
+  </aside>`;
 }
 
 function libraryPage() {
@@ -1039,34 +1066,15 @@ function wordDialogMarkup(article) {
   return `
     <dialog class="word-dialog" id="wordDialog">
       <header>
-        <div><span>VOCABULARY</span><h2>${esc(state.word)}</h2>${definition?.phonetic ? `<p>${esc(definition.phonetic)}</p>` : ''}</div>
+        <div><span>DEEPSEEK DICTIONARY</span><h2>${esc(state.word)}</h2>${aiDefinition?.phonetic ? `<p>${esc(aiDefinition.phonetic)}</p>` : ''}</div>
         <div class="word-dialog-head-actions">
           <b>已标记生词</b>
-          ${definition ? `<button type="button" class="word-audio-button" data-speak-word="${esc(state.word)}">▶ 发音</button>` : ''}
+          <button type="button" class="word-audio-button" data-speak-word="${esc(state.word)}">▶ 发音</button>
           <button type="button" class="word-dialog-close" data-close-word-dialog aria-label="关闭单词释义">关闭 ×</button>
         </div>
       </header>
       <div class="word-dialog-content">
-        ${state.status === 'loading' ? `<div class="word-loading"><i></i><b>正在查询词典…</b><p>生词标记已经保存。</p></div>` : ''}
-        ${state.status === 'error' ? `<div class="word-error"><b>暂时无法获取在线词典</b><p>${esc(state.error || '请检查网络后重新打开。你仍然可以填写中文释义。')}</p><button type="button" class="outline" data-retry-word>重新查询</button></div>` : ''}
-        ${definition ? `
-          <div class="word-bilingual-dictionary">
-            ${aiWordDefinitionMarkup(state, aiDefinition)}
-            ${ecdictSectionMarkup(definition.chinese)}
-            <section class="word-dictionary-section word-english-dictionary">
-              <div class="word-section-title"><span>英文词典</span><b>DATAMUSE</b></div>
-              <div class="word-meanings">
-                ${definition.meanings.map(meaning => `
-                  <section>
-                    <h3>${esc(meaning.partOfSpeech || '释义')}</h3>
-                    <ol>${meaning.definitions.map(item => `<li><p>${esc(item.definition)}</p>${item.example ? `<small>例句：${esc(item.example)}</small>` : ''}</li>`).join('')}</ol>
-                    ${meaning.synonyms?.length ? `<div><span>关联词</span>${meaning.synonyms.map(item => `<button type="button" data-related-word="${esc(item)}">${esc(item)}</button>`).join('')}</div>` : ''}
-                  </section>`).join('')}
-                ${definition.origin ? `<details><summary>词源信息</summary><p>${esc(definition.origin)}</p></details>` : ''}
-              </div>
-            </section>
-            <p class="dictionary-source">释义来源：${esc(definition.source || '词典服务')} · 已保存到本地缓存</p>
-          </div>` : ''}
+        <div class="word-bilingual-dictionary">${aiWordDefinitionMarkup(state, aiDefinition)}</div>
         <label class="word-chinese-note"><span>我的中文笔记</span><textarea id="wordChineseNote" placeholder="写下适合本文语境的中文意思或记忆提示…">${esc(note)}</textarea></label>
       </div>
       <footer><small>再次点击单词不会取消生词；请在上方生词列表中点“×”移除。</small><div><button type="button" class="outline" data-close-word-dialog>关闭</button><button type="button" class="primary" data-save-word-note>保存释义</button></div></footer>
@@ -1077,38 +1085,20 @@ function aiWordDefinitionMarkup(state, entry) {
   const status = state.aiStatus || (entry ? 'ready' : ui.aiApiKey ? 'idle' : 'needs-key');
   if (!state.sentenceId) return '';
   return `<section class="word-dictionary-section word-ai-dictionary">
-    <div class="word-section-title"><span>AI 语境释义</span><b>DEEPSEEK</b></div>
-    ${status === 'loading' ? '<div class="word-ai-loading"><i></i><span>正在结合上下文判断词义…</span></div>' : ''}
-    ${status === 'needs-key' ? '<div class="word-ai-empty"><p>填写 DeepSeek API 密钥后，可结合当前句和上下文生成准确的中文释义。</p><button type="button" data-open-word-ai-settings>设置 DeepSeek API</button></div>' : ''}
+    <div class="word-section-title"><span>中英双语词典</span><b>DEEPSEEK</b></div>
+    ${status === 'loading' ? '<div class="word-ai-loading"><i></i><span>正在生成中英双语词典释义…</span></div>' : ''}
+    ${status === 'needs-key' ? '<div class="word-ai-empty"><p>填写 DeepSeek API 密钥后，可获得中文释义、英文释义和本文语境义。</p><button type="button" data-open-word-ai-settings>设置 DeepSeek API</button></div>' : ''}
     ${status === 'error' ? `<div class="word-ai-empty"><p>${esc(state.aiError || 'AI 语境释义生成失败。')}</p><button type="button" data-generate-ai-word="${esc(state.word)}">重新生成</button></div>` : ''}
-    ${entry ? `<div class="word-ai-result">
-      <div><strong>${esc(entry.meaning || '')}</strong>${entry.partOfSpeech ? `<span>${esc(entry.partOfSpeech)}</span>` : ''}</div>
-      ${entry.explanation ? `<p>${esc(entry.explanation)}</p>` : ''}
+    ${entry ? `<div class="word-ai-result ai-dictionary-entry">
+      <div class="ai-dictionary-heading"><strong>${esc(entry.headword || state.word)}</strong>${entry.phonetic ? `<em>${esc(entry.phonetic)}</em>` : ''}${entry.partOfSpeech ? `<span>${esc(entry.partOfSpeech)}</span>` : ''}</div>
+      <section><h3>中文释义</h3><ol>${(entry.chineseDefinitions || [entry.meaning]).filter(Boolean).map(item => `<li>${esc(item)}</li>`).join('')}</ol></section>
+      <section lang="en"><h3>English definition</h3><ol>${(entry.englishDefinitions || []).filter(Boolean).map(item => `<li>${esc(item)}</li>`).join('') || '<li>No English definition returned.</li>'}</ol></section>
+      <div class="ai-context-meaning"><span>本文语境</span><p><b>中：</b>${esc(entry.contextMeaningZh || entry.explanation || '')}</p><p lang="en"><b>EN:</b> ${esc(entry.contextMeaningEn || '')}</p></div>
       ${entry.collocation ? `<small><b>语境搭配</b>${esc(entry.collocation)}</small>` : ''}
-      <footer><span>基于当前句及前后语境</span><button type="button" data-generate-ai-word="${esc(state.word)}">重新生成</button></footer>
+      ${entry.example ? `<small><b>例句</b>${esc(entry.example)}</small>` : ''}
+      <footer><span>基于当前句及前后语境 · 已缓存</span><button type="button" data-generate-ai-word="${esc(state.word)}">重新生成</button></footer>
     </div>` : status === 'idle' ? `<div class="word-ai-empty"><p>可以让 AI 结合当前文章语境解释这个词。</p><button type="button" data-generate-ai-word="${esc(state.word)}">生成语境释义</button></div>` : ''}
   </section>`;
-}
-
-function ecdictSectionMarkup(entry) {
-  if (!entry) return `<section class="word-dictionary-section word-chinese-dictionary"><div class="word-section-title"><span>中文释义</span><b>待补充</b></div><p class="dictionary-empty">暂未找到中文释义，可以在下方填写适合本文语境的中文笔记。</p></section>`;
-  const lines = String(entry.translation || '').split(/\n+/).map(item => item.trim()).filter(Boolean);
-  const tagNames = { zk: '中考', gk: '高考', cet4: '四级', cet6: '六级', ky: '考研', ielts: '雅思', toefl: '托福', gre: 'GRE' };
-  const tags = String(entry.tag || '').split(/\s+/).map(tag => tagNames[tag.toLowerCase()] || '').filter(Boolean);
-  if (Number(entry.oxford)) tags.unshift('牛津核心词');
-  if (Number(entry.collins) > 0) tags.unshift(`柯林斯 ${entry.collins} 星`);
-  const exchangeNames = { p: '过去式', d: '过去分词', i: '现在分词', 3: '第三人称单数', r: '比较级', t: '最高级', s: '复数', 0: '词根', 1: '原形' };
-  const exchanges = String(entry.exchange || '').split('/').map(item => {
-    const [code, ...value] = item.split(':');
-    return value.length ? { label: exchangeNames[code] || code, value: value.join(':') } : null;
-  }).filter(Boolean);
-  return `
-    <section class="word-dictionary-section word-chinese-dictionary">
-      <div class="word-section-title"><span>中文释义</span><b>${esc(entry.source || 'ECDICT')}</b></div>
-      ${lines.length ? `<ul class="chinese-definition-list">${lines.map(line => `<li>${esc(line)}</li>`).join('')}</ul>` : '<p class="dictionary-empty">暂无中文释义。</p>'}
-      ${tags.length ? `<div class="word-meta-tags">${[...new Set(tags)].map(tag => `<span>${esc(tag)}</span>`).join('')}</div>` : ''}
-      ${exchanges.length ? `<details class="word-exchange"><summary>词形变化</summary><div>${exchanges.map(item => `<span><small>${esc(item.label)}</small>${esc(item.value)}</span>`).join('')}</div></details>` : ''}
-    </section>`;
 }
 
 function sentenceCard(sentence, index, article) {
@@ -1116,7 +1106,9 @@ function sentenceCard(sentence, index, article) {
   const checkOpen = ui.translationCheckIds.has(sentence.id);
   const reference = sentence.referenceTranslation || '';
   const generation = ui.translationGeneration.get(sentence.id);
-  const referenceService = ui.translationProvider === 'deepseek' ? 'DeepSeek AI 翻译' : 'MyMemory 在线翻译';
+  const referenceService = 'DeepSeek AI 上下文翻译';
+  const review = sentence.aiTranslationReview || null;
+  const reviewState = ui.translationReview.get(sentence.id);
   return `
     <article class="sentence-card ${difficult}" data-sentence-id="${sentence.id}">
       <header><span>${String(index + 1).padStart(2, '0')}</span><button data-toggle-difficult="${sentence.id}">${sentence.difficult ? '◆ 已标记长难句' : '◇ 标记长难句'}</button></header>
@@ -1134,12 +1126,31 @@ function sentenceCard(sentence, index, article) {
             <label class="reference-translation-only"><span>参考译文</span><textarea data-reference-translation placeholder="正在等待生成，也可以直接填写…" ${generation?.status === 'loading' ? 'aria-busy="true"' : ''}>${esc(reference)}</textarea></label>
             ${generation?.status === 'loading' ? '<p class="translation-generating"><i></i>在线翻译正在生成，首次使用可能需要几秒钟。</p>' : ''}
             ${generation?.status === 'error' ? `<p class="translation-generation-error">${esc(generation.error)}</p>` : ''}
-            <footer><small class="translation-source-line"><span>${referenceService} · 结果仅供核对，可修改。</span><button class="translation-settings-gear" type="button" data-open-translation-settings aria-label="翻译模型设置" aria-expanded="${ui.translationSettingsOpen}"><b aria-hidden="true">⚙</b><i role="tooltip">翻译模型设置</i></button></small><div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
+            <footer><small class="translation-source-line"><span>${referenceService} · 结果仅供核对，可修改。</span><button class="translation-settings-gear" type="button" data-open-translation-settings aria-label="DeepSeek AI 设置" aria-expanded="${ui.translationSettingsOpen}"><b aria-hidden="true">⚙</b><i role="tooltip">DeepSeek AI 设置</i></button></small><div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
+            <section class="translation-ai-review">
+              <div class="translation-ai-review-head"><div><span>AI TRANSLATION CHECK</span><b>我的译文 × 参考译文</b></div><button type="button" data-review-translation="${sentence.id}" ${reviewState?.status === 'loading' ? 'disabled' : ''}>${review ? '重新校验' : 'AI 校验并整合'}</button></div>
+              ${reviewState?.status === 'loading' ? '<p class="translation-review-loading"><i></i>正在核对准确性、遗漏信息和中文表达…</p>' : ''}
+              ${reviewState?.status === 'error' ? `<p class="translation-generation-error">${esc(reviewState.error)}</p>` : ''}
+              ${review ? translationReviewMarkup(sentence, review) : '<p class="translation-review-empty">写完自己的中文翻译并生成参考译文后，让 AI 对照原句进行校验。</p>'}
+            </section>
           </div>` : ''}
       </section>
       <details><summary>校对识别文字</summary><textarea data-sentence-text>${esc(sentence.text)}</textarea></details>
     </article>
   `;
+}
+
+function translationReviewMarkup(sentence, review) {
+  const strengths = Array.isArray(review.strengths) ? review.strengths : [];
+  const issues = Array.isArray(review.issues) ? review.issues : [];
+  return `<div class="translation-review-result">
+    <header><strong>${Math.max(0, Math.min(100, Number(review.score) || 0))}<small>/100</small></strong><div><b>${esc(review.verdict || '校验完成')}</b><p>${esc(review.summary || '')}</p></div></header>
+    <div class="translation-review-columns">
+      <section><span>做得好的地方</span>${strengths.length ? `<ul>${strengths.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : '<p>暂无补充。</p>'}</section>
+      <section><span>需要改进</span>${issues.length ? `<ul>${issues.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : '<p>没有明显误译或遗漏。</p>'}</section>
+    </div>
+    <section class="integrated-translation"><span>整合译文</span><p>${esc(review.integratedTranslation || '')}</p><button type="button" data-use-integrated-translation="${sentence.id}">采用这版译文</button></section>
+  </div>`;
 }
 
 function tokenize(text) {
@@ -1180,10 +1191,6 @@ function bind() {
     ui.translationSettingsOpen = false;
     render();
   });
-  document.querySelectorAll('input[name="translationProvider"]').forEach(input => input.addEventListener('change', event => {
-    const dialog = event.target.closest('.translation-settings-dialog');
-    dialog?.querySelectorAll('.translation-provider-options label').forEach(label => label.classList.toggle('selected', label.contains(event.target)));
-  }));
   document.querySelector('[data-translation-settings-form]')?.addEventListener('submit', saveTranslationSettings);
   document.querySelector('[data-toggle-api-key]')?.addEventListener('click', event => {
     const button = event.currentTarget;
@@ -1315,6 +1322,9 @@ function bind() {
     ui.wordDialog = null;
     ui.readerSentenceIndex = 0;
     ui.readerCardDirection = 'next';
+    ui.aiCompanionOpen = false;
+    ui.aiCompanionMessages = [];
+    ui.aiCompanionError = '';
     ui.view = 'reader';
     render();
   }));
@@ -1407,6 +1417,12 @@ function bind() {
       render();
       return;
     }
+    if (event.key === 'Escape' && ui.aiCompanionOpen) {
+      event.preventDefault();
+      ui.aiCompanionOpen = false;
+      render();
+      return;
+    }
     if (event.key === 'Escape' && ui.reconstructionPracticeOpen) return;
     if (event.key === 'Escape' && ui.reconstructionDrawerOpen) {
       event.preventDefault();
@@ -1471,6 +1487,8 @@ function bind() {
   }));
   document.querySelectorAll('[data-generate-reference]').forEach(button => button.addEventListener('click', () => generateReferenceTranslation(button.dataset.generateReference, true)));
   document.querySelectorAll('[data-save-reference]').forEach(button => button.addEventListener('click', () => saveReferenceTranslation(button.dataset.saveReference)));
+  document.querySelectorAll('[data-review-translation]').forEach(button => button.addEventListener('click', () => reviewTranslationWithAi(button.dataset.reviewTranslation)));
+  document.querySelectorAll('[data-use-integrated-translation]').forEach(button => button.addEventListener('click', () => useIntegratedTranslation(button.dataset.useIntegratedTranslation)));
   document.querySelector('[data-open-reconstruction-drawer]')?.addEventListener('click', openReconstructionDrawer);
   document.querySelectorAll('[data-close-reconstruction-drawer]').forEach(button => button.addEventListener('click', closeReconstructionDrawer));
   document.querySelectorAll('[data-open-reconstruction-practice]').forEach(button => button.addEventListener('click', () => openReconstructionPractice(button.dataset.openReconstructionPractice)));
@@ -1517,7 +1535,7 @@ function bind() {
   }
   document.querySelectorAll('[data-close-word-dialog]').forEach(button => button.addEventListener('click', closeWordDialog));
   document.querySelector('[data-save-word-note]')?.addEventListener('click', saveWordNote);
-  document.querySelector('[data-retry-word]')?.addEventListener('click', () => loadWordDefinition(ui.wordDialog?.word, true));
+  document.querySelector('[data-retry-word]')?.addEventListener('click', () => loadAiWordDefinition(ui.wordDialog?.word, ui.wordDialog?.sentenceId, true));
   document.querySelector('[data-open-word-ai-settings]')?.addEventListener('click', () => {
     ui.translationSettingsOpen = true;
     render();
@@ -1578,6 +1596,19 @@ function bind() {
   document.querySelector('[data-save-reader]')?.addEventListener('click', () => saveReader(false));
   document.querySelector('[data-complete-reader]')?.addEventListener('click', () => saveReader(true));
   document.querySelector('[data-open-immersive]')?.addEventListener('click', openImmersiveReader);
+  document.querySelectorAll('[data-toggle-ai-companion]').forEach(button => button.addEventListener('click', () => {
+    const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+    if (article) collectReader(article);
+    ui.aiCompanionOpen = !ui.aiCompanionOpen;
+    ui.aiCompanionError = '';
+    render();
+    if (ui.aiCompanionOpen) requestAnimationFrame(() => document.querySelector('[data-ai-companion-form] textarea')?.focus());
+  }));
+  document.querySelectorAll('[data-ai-suggestion]').forEach(button => button.addEventListener('click', () => sendAiCompanionQuestion(button.dataset.aiSuggestion)));
+  document.querySelector('[data-ai-companion-form]')?.addEventListener('submit', event => {
+    event.preventDefault();
+    sendAiCompanionQuestion(event.currentTarget.elements.question?.value);
+  });
   document.querySelector('[data-close-immersive]')?.addEventListener('click', closeImmersiveReader);
   document.querySelector('[data-immersive-translation]')?.addEventListener('input', syncImmersiveTranslation);
   document.querySelector('[data-pomodoro-panel-toggle]')?.addEventListener('click', () => {
@@ -2559,10 +2590,16 @@ function collectReader(article) {
   document.querySelectorAll('[data-sentence-id]').forEach(card => {
     const sentence = article.sentences.find(item => item.id === card.dataset.sentenceId);
     if (!sentence) return;
-    sentence.translation = card.querySelector('[data-translation]')?.value || '';
-    sentence.notes = card.querySelector('[data-notes]')?.value || '';
+    const nextTranslation = card.querySelector('[data-translation]')?.value || '';
     const referenceInput = card.querySelector('[data-reference-translation]');
-    if (referenceInput) sentence.referenceTranslation = referenceInput.value.trim();
+    const nextReference = referenceInput ? referenceInput.value.trim() : sentence.referenceTranslation || '';
+    if (nextTranslation !== (sentence.translation || '') || nextReference !== (sentence.referenceTranslation || '')) {
+      delete sentence.aiTranslationReview;
+      ui.translationReview.delete(sentence.id);
+    }
+    sentence.translation = nextTranslation;
+    sentence.notes = card.querySelector('[data-notes]')?.value || '';
+    if (referenceInput) sentence.referenceTranslation = nextReference;
     sentence.text = card.querySelector('[data-sentence-text]')?.value.trim() || sentence.text;
   });
   const practiceDialog = document.querySelector('[data-reconstruction-practice]');
@@ -2584,13 +2621,13 @@ async function openWordDefinition(wordValue) {
   if (isNewWord) article.vocabulary.push(word);
   article.updatedAt = new Date().toISOString();
   const storedDefinition = article.wordDefinitions?.[word.toLowerCase()];
-  const cached = storedDefinition?.dictionaryVersion >= 2 ? storedDefinition : null;
+  const cached = storedDefinition || null;
   const contextSentence = article.sentences[ui.readerSentenceIndex] || null;
   const aiCached = contextSentence ? cached?.aiContexts?.[contextSentence.id] : null;
   ui.wordDialog = {
     word,
     sentenceId: contextSentence?.id || null,
-    status: cached ? 'ready' : 'loading',
+    status: 'ready',
     definition: cached || null,
     error: '',
     aiStatus: aiCached ? 'ready' : ui.aiApiKey ? 'loading' : 'needs-key',
@@ -2599,77 +2636,12 @@ async function openWordDefinition(wordValue) {
   render();
   await records.put('articles', article);
   if (isNewWord) await recordStudySnapshot(article, 'vocabulary');
-  if (!cached) await loadWordDefinition(word);
   if (ui.aiApiKey && contextSentence && !aiCached) await loadAiWordDefinition(word, contextSentence.id);
-}
-
-async function loadWordDefinition(wordValue, force = false) {
-  const word = String(wordValue || '').trim();
-  const articleId = ui.selectedArticleId;
-  if (!word || !articleId) return;
-  const article = ui.articles.find(item => item.id === articleId);
-  const key = word.toLowerCase();
-  const storedDefinition = article?.wordDefinitions?.[key];
-  const cached = storedDefinition?.dictionaryVersion >= 2 ? storedDefinition : null;
-  if (cached && !force) {
-    ui.wordDialog = { ...ui.wordDialog, word, status: 'ready', definition: cached, error: '' };
-    render();
-    return;
-  }
-  ui.wordDialog = { ...ui.wordDialog, word, status: 'loading', definition: null, error: '' };
-  render();
-  try {
-    const shardKey = word.toLowerCase().replace(/[^a-z]/g, '').slice(0, 2) || '__';
-    const [exactResult, relatedResult, chineseResult] = await Promise.allSettled([
-      fetch(`https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&qe=sp&md=dpr&ipa=1&max=1`),
-      fetch(`https://api.datamuse.com/words?ml=${encodeURIComponent(word)}&max=8`),
-      fetch(`./data/ecdict-shards/${shardKey}.json`),
-    ]);
-    const exactResponse = exactResult.status === 'fulfilled' ? exactResult.value : null;
-    const relatedResponse = relatedResult.status === 'fulfilled' ? relatedResult.value : null;
-    const chineseResponse = chineseResult.status === 'fulfilled' ? chineseResult.value : null;
-    const exactItems = exactResponse?.ok ? await exactResponse.json() : [];
-    const exact = exactItems.find(item => item.word?.toLowerCase() === key) || exactItems[0] || null;
-    const related = relatedResponse?.ok ? (await relatedResponse.json()).map(item => item.word).filter(Boolean).slice(0, 8) : [];
-    const chineseShard = chineseResponse?.ok ? await chineseResponse.json() : {};
-    const chinese = chineseShard[key] ? { ...chineseShard[key], source: 'ECDICT' } : null;
-    if (!exact && !chinese) throw new Error('两套词典中都没有找到这个词形，可以尝试点击它的原形。');
-    const groups = new Map();
-    (exact?.defs || []).forEach(value => {
-      const [part = 'definition', ...content] = value.split('\t');
-      const label = ({ n: 'noun', v: 'verb', adj: 'adjective', adv: 'adverb' })[part] || part;
-      const definitions = groups.get(label) || [];
-      definitions.push({ definition: content.join(' ').trim(), example: '' });
-      groups.set(label, definitions);
-    });
-    if (!groups.size) groups.set('definition', [{ definition: 'See the Chinese definition and add your own contextual note.', example: '' }]);
-    const tags = exact?.tags || [];
-    const normalized = {
-      dictionaryVersion: 3,
-      phonetic: tags.find(tag => tag.startsWith('ipa_pron:'))?.slice(9).trim() || '',
-      audio: '',
-      origin: '',
-      meanings: [...groups].map(([partOfSpeech, definitions], index) => ({
-        partOfSpeech,
-        definitions,
-        synonyms: index === 0 ? related : [],
-      })),
-      chinese,
-      source: exact && chinese ? 'Datamuse 在线英英词典 + ECDICT 英汉词典' : exact ? 'Datamuse 在线英英词典' : 'ECDICT 英汉词典',
-    };
-    if (!normalized?.meanings?.length) throw new Error('词典返回了空释义。');
-    await cacheWordDefinition(articleId, key, word, normalized);
-  } catch (error) {
-    if (ui.wordDialog?.word.toLowerCase() === key) {
-      ui.wordDialog = { ...ui.wordDialog, word, status: 'error', definition: null, error: error.message || '词典查询失败。' };
-      render();
-    }
-  }
 }
 
 function confirmDeepSeekWordContext() {
   if (localStorage.getItem('readquest-deepseek-word-context-consent-v1') === '1') return true;
-  const allowed = window.confirm('为了生成中文单词语境释义，需要把目标单词、文章标题、所在句及前后各最多两句发送到 DeepSeek API。不会发送 PDF、整篇文章、中文翻译、生词表或个人笔记。是否允许？');
+  const allowed = window.confirm('为了生成中英双语词典释义，需要把目标单词、文章标题、所在句及前后各最多两句发送到 DeepSeek API。不会发送 PDF、整篇文章、中文翻译、生词表或个人笔记。是否允许？');
   if (allowed) localStorage.setItem('readquest-deepseek-word-context-consent-v1', '1');
   return allowed;
 }
@@ -2688,7 +2660,7 @@ async function requestDeepSeekWordDefinition(article, sentence, word) {
       messages: [
         {
           role: 'system',
-          content: '你是一名严谨的英语精读词典编辑。根据文章上下文解释目标英文单词在目标句中的具体含义。只输出一个 JSON 对象，不要 Markdown、代码围栏或额外文字。JSON 必须包含 meaning、partOfSpeech、explanation、collocation 四个字符串字段：meaning 是简洁自然的中文义项；partOfSpeech 使用中文词性；explanation 用一到两句话说明该词在本句为何取此义；collocation 写出目标句中的相关英文搭配并给出简短中文解释，没有固定搭配时为空字符串。不要翻译整句。',
+          content: '你是一名严谨的英汉双语词典编辑。根据文章上下文，为目标英文单词制作词典式条目。只输出一个 JSON 对象，不要 Markdown、代码围栏或额外文字。字段必须为：headword（词头）、phonetic（IPA 音标）、partOfSpeech（英文词性缩写与中文词性）、chineseDefinitions（2至4条中文常用义项字符串数组，语境义放第一条）、englishDefinitions（2至4条清晰简洁的英文释义字符串数组，语境义放第一条）、contextMeaningZh（说明本句具体取义的中文短句）、contextMeaningEn（说明本句具体取义的英文短句）、collocation（本句相关英文搭配及中文解释）、example（一个自然英文例句及中文翻译）。不要翻译整句。',
         },
         {
           role: 'user',
@@ -2696,14 +2668,15 @@ async function requestDeepSeekWordDefinition(article, sentence, word) {
         },
       ],
       thinking: { type: 'disabled' },
-      max_tokens: 360,
+      response_format: { type: 'json_object' },
+      max_tokens: 700,
       temperature: 0.15,
       stream: false,
     }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if (response.status === 401) throw new Error('DeepSeek API 密钥无效，请在“AI 与参考译文设置”中检查。');
+    if (response.status === 401) throw new Error('DeepSeek API 密钥无效，请在“DeepSeek AI 设置”中检查。');
     if (response.status === 402) throw new Error('DeepSeek API 账户余额不足，请充值后重试。');
     if (response.status === 429) throw new Error('DeepSeek API 请求过快，请稍后重试。');
     throw new Error(data.error?.message || `DeepSeek API 请求失败（${response.status}）。`);
@@ -2716,14 +2689,19 @@ async function requestDeepSeekWordDefinition(article, sentence, word) {
   let parsed;
   try { parsed = JSON.parse(jsonText.slice(start, end + 1)); } catch { throw new Error('DeepSeek 返回的语境释义格式不完整，请重试。'); }
   const result = {
-    meaning: String(parsed.meaning || '').trim(),
+    headword: String(parsed.headword || word).trim(),
+    phonetic: String(parsed.phonetic || '').trim(),
     partOfSpeech: String(parsed.partOfSpeech || '').trim(),
-    explanation: String(parsed.explanation || '').trim(),
+    chineseDefinitions: Array.isArray(parsed.chineseDefinitions) ? parsed.chineseDefinitions.map(item => String(item).trim()).filter(Boolean).slice(0, 4) : [],
+    englishDefinitions: Array.isArray(parsed.englishDefinitions) ? parsed.englishDefinitions.map(item => String(item).trim()).filter(Boolean).slice(0, 4) : [],
+    contextMeaningZh: String(parsed.contextMeaningZh || parsed.meaning || '').trim(),
+    contextMeaningEn: String(parsed.contextMeaningEn || '').trim(),
     collocation: String(parsed.collocation || '').trim(),
+    example: String(parsed.example || '').trim(),
     model: ui.aiModel || 'deepseek-flash',
     generatedAt: new Date().toISOString(),
   };
-  if (!result.meaning) throw new Error('DeepSeek 没有返回中文义项，请重试。');
+  if (!result.chineseDefinitions.length || !result.englishDefinitions.length) throw new Error('DeepSeek 没有返回完整的中英双语释义，请重试。');
   return result;
 }
 
@@ -2970,31 +2948,26 @@ function bindReconstructionInputs() {
 function saveTranslationSettings(event) {
   event.preventDefault();
   const form = event.currentTarget;
-  const provider = form.querySelector('input[name="translationProvider"]:checked')?.value || 'mymemory';
   const apiKey = form.querySelector('#translationApiKey')?.value.trim() || '';
   const model = form.querySelector('#translationAiModel')?.value || 'deepseek-flash';
-  if (provider === 'deepseek' && !apiKey) {
-    toast('选择 DeepSeek API 时需要填写 API 密钥。', true);
+  if (!apiKey) {
+    toast('请填写 DeepSeek API 密钥。', true);
     form.querySelector('#translationApiKey')?.focus();
     return;
   }
-  ui.translationProvider = provider;
   ui.aiApiKey = apiKey;
   ui.aiModel = model;
   ui.translationSettingsOpen = false;
   const pendingWord = ui.wordDialog?.word;
   const pendingSentenceId = ui.wordDialog?.sentenceId;
   try {
-    localStorage.setItem('readquest-translation-provider', provider);
     localStorage.setItem('readquest-deepseek-model', model);
     if (apiKey) sessionStorage.setItem('readquest-deepseek-api-key', apiKey);
     else sessionStorage.removeItem('readquest-deepseek-api-key');
   } catch {}
   render();
   if (apiKey && pendingWord && pendingSentenceId) loadAiWordDefinition(pendingWord, pendingSentenceId);
-  toast(provider === 'deepseek'
-    ? 'DeepSeek 已用于参考译文和单词语境释义。'
-    : apiKey ? '参考译文使用 MyMemory；DeepSeek 已用于单词语境释义。' : '参考译文已切换为 MyMemory。');
+  toast('DeepSeek 已用于参考译文、译文校验、双语词典和 AI 精灵。');
 }
 
 function buildTranslationContext(article, sentence, radius = 2) {
@@ -3046,19 +3019,183 @@ async function requestDeepSeekTranslation(article, sentence) {
   return outputText.replace(/^\s*[“"]|[”"]\s*$/g, '').trim();
 }
 
+function parseDeepSeekJson(outputText, errorMessage) {
+  const clean = String(outputText || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = clean.indexOf('{');
+  const end = clean.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error(errorMessage);
+  try { return JSON.parse(clean.slice(start, end + 1)); } catch { throw new Error(errorMessage); }
+}
+
+async function requestDeepSeekTranslationReview(article, sentence) {
+  const context = buildTranslationContext(article, sentence);
+  const response = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ui.aiApiKey}` },
+    body: JSON.stringify({
+      model: ui.aiModel || 'deepseek-flash',
+      messages: [
+        { role: 'system', content: '你是一名严格但鼓励学生的英语精读教师。对照英文原句、学生译文和参考译文，检查信息准确性、逻辑关系、语气、指代和中文表达。只输出 JSON 对象，不要 Markdown。字段必须为：score（0至100整数）、verdict（短标题）、summary（两句话以内）、strengths（字符串数组，最多3项）、issues（字符串数组，最多4项，每项明确指出问题和改法）、integratedTranslation（吸收学生译文优点并修正问题后的完整中文译文）。参考译文也可能有误，必须以英文原句和上下文为准。' },
+        { role: 'user', content: `文章标题：${article.title}\n上文：${context.before.join(' ') || '（无）'}\n【英文原句】${sentence.text.trim()}\n下文：${context.after.join(' ') || '（无）'}\n【我的译文】${sentence.translation.trim()}\n【参考译文】${sentence.referenceTranslation.trim()}\n请校验并整合。` },
+      ],
+      thinking: { type: 'disabled' },
+      response_format: { type: 'json_object' },
+      max_tokens: 900,
+      temperature: 0.15,
+      stream: false,
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('DeepSeek API 密钥无效，请在设置中检查。');
+    if (response.status === 402) throw new Error('DeepSeek API 账户余额不足，请充值后重试。');
+    if (response.status === 429) throw new Error('DeepSeek API 请求过快，请稍后重试。');
+    throw new Error(data.error?.message || `DeepSeek API 请求失败（${response.status}）。`);
+  }
+  const parsed = parseDeepSeekJson(data.choices?.[0]?.message?.content, 'DeepSeek 返回的校验结果格式不完整，请重试。');
+  const result = {
+    score: Math.max(0, Math.min(100, Math.round(Number(parsed.score) || 0))),
+    verdict: String(parsed.verdict || '校验完成').trim(),
+    summary: String(parsed.summary || '').trim(),
+    strengths: Array.isArray(parsed.strengths) ? parsed.strengths.map(String).map(item => item.trim()).filter(Boolean).slice(0, 3) : [],
+    issues: Array.isArray(parsed.issues) ? parsed.issues.map(String).map(item => item.trim()).filter(Boolean).slice(0, 4) : [],
+    integratedTranslation: String(parsed.integratedTranslation || '').trim(),
+    generatedAt: new Date().toISOString(),
+    model: ui.aiModel || 'deepseek-flash',
+  };
+  if (!result.integratedTranslation) throw new Error('DeepSeek 没有返回整合译文，请重试。');
+  return result;
+}
+
+async function reviewTranslationWithAi(sentenceId) {
+  const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+  if (!article) return;
+  collectReader(article);
+  const sentence = article.sentences.find(item => item.id === sentenceId);
+  if (!sentence?.translation?.trim()) return toast('请先写下自己的中文翻译。', true);
+  if (!sentence.referenceTranslation?.trim()) return toast('请先生成或填写参考译文，再进行 AI 校验。', true);
+  if (!ui.aiApiKey) {
+    ui.translationSettingsOpen = true;
+    render();
+    return toast('请先填写 DeepSeek API 密钥。', true);
+  }
+  if (localStorage.getItem('readquest-deepseek-review-consent-v1') !== '1') {
+    const allowed = window.confirm('AI 校验需要把文章标题、英文原句及前后各最多两句、你的中文译文和参考译文发送到 DeepSeek API。不会发送 PDF、生词表或其他笔记。是否允许？');
+    if (!allowed) return;
+    localStorage.setItem('readquest-deepseek-review-consent-v1', '1');
+  }
+  ui.translationReview.set(sentenceId, { status: 'loading', error: '' });
+  render();
+  try {
+    sentence.aiTranslationReview = await requestDeepSeekTranslationReview(article, sentence);
+    article.updatedAt = new Date().toISOString();
+    await records.put('articles', article);
+    ui.translationReview.delete(sentenceId);
+    await refreshData();
+    render();
+    toast('AI 校验完成，已生成整合译文。');
+  } catch (error) {
+    ui.translationReview.set(sentenceId, { status: 'error', error: error.message || 'AI 校验失败，请重试。' });
+    render();
+  }
+}
+
+async function useIntegratedTranslation(sentenceId) {
+  const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+  if (!article) return;
+  collectReader(article);
+  const sentence = article.sentences.find(item => item.id === sentenceId);
+  const integrated = sentence?.aiTranslationReview?.integratedTranslation?.trim();
+  if (!integrated) return;
+  sentence.translation = integrated;
+  article.updatedAt = new Date().toISOString();
+  await records.put('articles', article);
+  render();
+  toast('整合译文已填入“中文翻译”，原校验结果仍保留。');
+}
+
+async function requestDeepSeekCompanion(article, sentence, messages) {
+  const context = sentence ? buildTranslationContext(article, sentence, 1) : { before: [], after: [] };
+  const learningContext = sentence
+    ? `文章标题：${article.title}\n上文：${context.before.join(' ') || '（无）'}\n当前英文句：${sentence.text}\n下文：${context.after.join(' ') || '（无）'}\n学生译文：${sentence.translation || '（未填写）'}\n参考译文：${sentence.referenceTranslation || '（未生成）'}`
+    : `文章标题：${article.title}`;
+  const response = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ui.aiApiKey}` },
+    body: JSON.stringify({
+      model: ui.aiModel || 'deepseek-flash',
+      messages: [
+        { role: 'system', content: `你是精读任务站的 AI 精灵，是耐心、准确的英语阅读伙伴。优先围绕给定的当前句回答词义、语法、结构、指代、翻译和表达问题。先直接回答，再用简短例子帮助理解；不要假装看到了未提供的文章内容。\n\n当前学习上下文：\n${learningContext}` },
+        ...messages.slice(-8).map(item => ({ role: item.role, content: item.content })),
+      ],
+      thinking: { type: 'disabled' },
+      max_tokens: 1000,
+      temperature: 0.35,
+      stream: false,
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('DeepSeek API 密钥无效，请在设置中检查。');
+    if (response.status === 402) throw new Error('DeepSeek API 账户余额不足。');
+    if (response.status === 429) throw new Error('提问过快，请稍后再试。');
+    throw new Error(data.error?.message || `DeepSeek API 请求失败（${response.status}）。`);
+  }
+  const answer = String(data.choices?.[0]?.message?.content || '').trim();
+  if (!answer) throw new Error('AI 精灵暂时没有返回内容，请重试。');
+  return answer;
+}
+
+async function sendAiCompanionQuestion(questionValue) {
+  const question = String(questionValue || '').trim();
+  if (!question || ui.aiCompanionSending) return;
+  const article = ui.articles.find(item => item.id === ui.selectedArticleId);
+  if (!article) return;
+  collectReader(article);
+  const sentence = article.sentences[ui.readerSentenceIndex] || null;
+  if (!ui.aiApiKey) {
+    ui.translationSettingsOpen = true;
+    render();
+    return toast('请先填写 DeepSeek API 密钥。', true);
+  }
+  if (localStorage.getItem('readquest-deepseek-companion-consent-v1') !== '1') {
+    const allowed = window.confirm('AI 精灵会把文章标题、当前英文句及相邻句、当前译文、参考译文和你的问题发送到 DeepSeek API。不会发送 PDF、整篇文章、生词表或其他笔记。是否允许？');
+    if (!allowed) return;
+    localStorage.setItem('readquest-deepseek-companion-consent-v1', '1');
+  }
+  ui.aiCompanionMessages.push({ role: 'user', content: question });
+  ui.aiCompanionSending = true;
+  ui.aiCompanionError = '';
+  render();
+  try {
+    const answer = await requestDeepSeekCompanion(article, sentence, ui.aiCompanionMessages);
+    ui.aiCompanionMessages.push({ role: 'assistant', content: answer });
+  } catch (error) {
+    ui.aiCompanionError = error.message || 'AI 精灵暂时无法回答，请重试。';
+  } finally {
+    ui.aiCompanionSending = false;
+    render();
+    requestAnimationFrame(() => {
+      const list = document.querySelector('[data-ai-companion-messages]');
+      if (list) list.scrollTop = list.scrollHeight;
+      document.querySelector('[data-ai-companion-form] textarea')?.focus();
+    });
+  }
+}
+
 async function generateReferenceTranslation(sentenceId, regenerate = false) {
   const article = ui.articles.find(item => item.id === ui.selectedArticleId);
   if (!article) return;
   collectReader(article);
   const sentence = article.sentences.find(item => item.id === sentenceId);
   if (!sentence?.text?.trim() || (!regenerate && sentence.referenceTranslation?.trim())) return;
-  if (ui.translationProvider === 'deepseek' && !ui.aiApiKey) {
+  if (!ui.aiApiKey) {
     ui.translationGeneration.set(sentenceId, { status: 'error', error: '请先在“译文设置”中填写 DeepSeek API 密钥。' });
     ui.translationSettingsOpen = true;
     render();
     return;
   }
-  if (ui.translationProvider === 'deepseek' && localStorage.getItem('readquest-deepseek-context-consent-v1') !== '1') {
+  if (localStorage.getItem('readquest-deepseek-context-consent-v1') !== '1') {
     const allowed = window.confirm('为了结合上下文生成参考译文，需要把文章标题、当前目标句及其前后各最多两句发送到 DeepSeek API。不会发送 PDF、中文翻译、笔记、生词或整篇文章。是否允许？');
     if (!allowed) {
       ui.translationGeneration.set(sentenceId, { status: 'error', error: '未启用 DeepSeek 翻译。你仍可手动填写参考译文。' });
@@ -3067,31 +3204,12 @@ async function generateReferenceTranslation(sentenceId, regenerate = false) {
     }
     localStorage.setItem('readquest-deepseek-context-consent-v1', '1');
   }
-  if (ui.translationProvider === 'mymemory' && localStorage.getItem('readquest-mymemory-consent') !== '1') {
-    const allowed = window.confirm('生成参考译文需要把当前英文句子发送到 MyMemory 在线翻译服务。只发送这一句英文，不发送 PDF、笔记或个人信息。是否允许？');
-    if (!allowed) {
-      ui.translationGeneration.set(sentenceId, { status: 'error', error: '未启用在线翻译。你仍可手动填写参考译文。' });
-      render();
-      return;
-    }
-    localStorage.setItem('readquest-mymemory-consent', '1');
-  }
   ui.translationGeneration.set(sentenceId, { status: 'loading', error: '' });
   render();
   try {
-    const sourceText = sentence.text.trim();
-    let translatedText;
-    if (ui.translationProvider === 'deepseek') {
-      translatedText = await requestDeepSeekTranslation(article, sentence);
-    } else {
-      if (new TextEncoder().encode(sourceText).length > 500) throw new Error('这个句子超过 MyMemory 的 500 字节限制，请切换 AI 翻译或手动填写。');
-      const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(sourceText)}&langpair=en%7Czh-CN`);
-      const data = await response.json().catch(() => ({}));
-      translatedText = String(data.responseData?.translatedText || '').trim();
-      if (!response.ok || data.responseStatus !== 200 || !translatedText) throw new Error(data.responseDetails || '没有生成可用的参考译文。');
-    }
+    const translatedText = await requestDeepSeekTranslation(article, sentence);
     sentence.referenceTranslation = translatedText;
-    sentence.referenceTranslationSource = ui.translationProvider === 'deepseek' ? `DeepSeek · ${ui.aiModel} · 上下文翻译` : 'MyMemory 在线翻译';
+    sentence.referenceTranslationSource = `DeepSeek · ${ui.aiModel} · 上下文翻译`;
     sentence.referenceTranslationGeneratedAt = new Date().toISOString();
     article.updatedAt = new Date().toISOString();
     await records.put('articles', article);
