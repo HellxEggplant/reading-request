@@ -1176,7 +1176,15 @@ function sentenceCard(sentence, index, article) {
         : esc(token)).join('')}</p>
       <label>中文翻译<textarea data-translation placeholder="写下你对这句话的理解…">${esc(sentence.translation || '')}</textarea></label>
       <label>语法或阅读笔记<textarea data-notes rows="3" placeholder="记下句子结构、阅读收获或疑问…">${esc(sentence.notes || '')}</textarea></label>
-      ${review ? translationReviewMarkup(sentence, review) : ''}
+      <section class="notes-ai-assistant ${review ? 'has-review' : ''}">
+        <div class="notes-ai-action">
+          <div><span>AI 阅读助手</span><small>结合原句、上下文和你的译文给出建议</small></div>
+          <button type="button" data-review-translation="${sentence.id}" ${reviewState?.status === 'loading' ? 'disabled' : ''}>${reviewState?.status === 'loading' ? '正在分析…' : review ? '重新分析' : '检查我的翻译'}</button>
+        </div>
+        ${reviewState?.status === 'loading' ? '<p class="translation-review-loading"><i></i>正在核对准确性、遗漏信息和中文表达…</p>' : ''}
+        ${reviewState?.status === 'error' ? `<p class="translation-generation-error">${esc(reviewState.error)}</p>` : ''}
+        ${review ? translationReviewMarkup(sentence, review) : ''}
+      </section>
       <section class="translation-check ${checkOpen ? 'is-open' : ''}">
         <button type="button" class="translation-check-toggle" data-toggle-translation-check="${sentence.id}">
           <span>${generation?.status === 'loading' ? '正在生成参考译文…' : '参考译文'}</span><b>${checkOpen ? '收起 −' : '查看 +'}</b>
@@ -1187,11 +1195,6 @@ function sentenceCard(sentence, index, article) {
             ${generation?.status === 'loading' ? '<p class="translation-generating"><i></i>在线翻译正在生成，首次使用可能需要几秒钟。</p>' : ''}
             ${generation?.status === 'error' ? `<p class="translation-generation-error">${esc(generation.error)}</p>` : ''}
             <footer><small class="translation-source-line"><span>${referenceService} · 结果仅供核对，可修改。</span><button class="translation-settings-gear" type="button" data-open-translation-settings aria-label="DeepSeek AI 设置" aria-expanded="${ui.translationSettingsOpen}"><b aria-hidden="true">⚙</b><i role="tooltip">DeepSeek AI 设置</i></button></small><div><button type="button" class="text-button" data-generate-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>${reference ? '重新生成' : generation?.status === 'error' ? '重试生成' : '立即生成'}</button><button type="button" class="outline" data-save-reference="${sentence.id}" ${generation?.status === 'loading' ? 'disabled' : ''}>保存参考译文</button></div></footer>
-            <section class="translation-ai-review">
-              <div class="translation-ai-review-head"><button type="button" data-review-translation="${sentence.id}" ${reviewState?.status === 'loading' ? 'disabled' : ''}>${reviewState?.status === 'loading' ? '正在校验…' : review ? '重新校验我的翻译' : '校验我的翻译'}</button></div>
-              ${reviewState?.status === 'loading' ? '<p class="translation-review-loading"><i></i>正在核对准确性、遗漏信息和中文表达…</p>' : ''}
-              ${reviewState?.status === 'error' ? `<p class="translation-generation-error">${esc(reviewState.error)}</p>` : ''}
-            </section>
           </div>` : ''}
       </section>
       <details><summary>校对识别文字</summary><textarea data-sentence-text>${esc(sentence.text)}</textarea></details>
